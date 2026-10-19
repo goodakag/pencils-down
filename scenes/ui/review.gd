@@ -119,7 +119,7 @@ func _build() -> void:
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(title)
 	var when := Label.new()
-	when.text = Time.get_datetime_string_from_unix_time(attempt.created_unix, true).replace("T", " ").substr(0, 16)
+	when.text = MarkingPrompt.local_date_time(attempt.created_unix)
 	when.theme_type_variation = "Muted"
 	v.add_child(when)
 	v.add_child(MainMenuCard._gap(4))

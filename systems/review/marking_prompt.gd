@@ -18,3 +18,10 @@ static func mmss(seconds: float) -> String:
 	if s >= 3600:
 		return "%d:%02d:%02d" % [s / 3600, (s / 60) % 60, s % 60]
 	return "%d:%02d" % [s / 60, s % 60]
+
+
+## "YYYY-MM-DD HH:MM" in local time. bias_minutes defaults to the system time zone.
+static func local_date_time(unix: int, bias_minutes: int = 2147483647) -> String:
+	if bias_minutes == 2147483647:
+		bias_minutes = int(Time.get_time_zone_from_system().get("bias", 0))
+	return Time.get_datetime_string_from_unix_time(unix + bias_minutes * 60, true).substr(0, 16)

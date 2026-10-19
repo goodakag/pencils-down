@@ -40,7 +40,7 @@ func _ready() -> void:
 	scroll.add_child(list)
 	for it in items:
 		var b := Button.new()
-		var date := Time.get_datetime_string_from_unix_time(int(it.created_unix), true).replace("T", " ").substr(0, 16)
+		var date := MarkingPrompt.local_date_time(int(it.created_unix))
 		b.text = "%s    ·    %s    ·    %s used" % [it.test_title, date, MarkingPrompt.mmss(float(it.used_s))]
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
