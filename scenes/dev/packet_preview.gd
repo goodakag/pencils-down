@@ -2,6 +2,7 @@ extends Node3D
 ## Dev-only preview of the test packet on a desk. Actions for DevShot: next, prev, scratch, overview.
 
 var packet: TestPacket
+var rig: PlayerRig
 
 
 func _ready() -> void:
@@ -50,14 +51,15 @@ func _ready() -> void:
 	packet.rotation.y = deg_to_rad(2.0)
 	packet.setup(doc, attempt, 150.0)
 
-	var cam := Camera3D.new()
-	cam.fov = 55
-	cam.position = Vector3(0.0, 0.31, 0.15)
-	add_child(cam)
-	cam.look_at(Vector3(0.0, 0.0, -0.03))
+	rig = PlayerRig.new()
+	add_child(rig)
+	rig.setup(packet, attempt, doc)
+	# Park the pencil near question 1 for the screenshot.
+	await get_tree().process_frame
+	rig._last_mouse = rig.camera.unproject_position(packet.active_page().to_global(Vector3(0.02, 0, -0.085)))
 	if OS.get_cmdline_user_args().has("--lean"):
-		cam.position = Vector3(0.03, 0.17, 0.0)
-		cam.look_at(Vector3(0.03, 0.0, -0.09))
+		rig._lean = 2
+		rig.set_view(PlayerRig.View.LEAN_2)
 
 
 func _sample_ink(doc: PdfDoc, attempt: Attempt) -> void:
@@ -92,3 +94,5 @@ func dev_action(name: String) -> void:
 		"prev": packet.turn(-1)
 		"scratch": packet.toggle_scratch()
 		"overview": packet.set_overview(true)
+		"lookup": rig.set_view(PlayerRig.View.LOOK_UP)
+		"eraser": rig.pencil.set_eraser(true)
