@@ -76,7 +76,12 @@ func show_settings() -> void:
 
 
 func show_history() -> void:
-	pass  # Task 17
+	var h := HistoryCard.new()
+	h.back.connect(show_menu)
+	h.open_attempt.connect(func(path: String) -> void:
+		ReviewScreen.pending_attempt_path = path
+		get_tree().change_scene_to_file("res://scenes/ui/review.tscn"))
+	_swap(h)
 
 
 func resume() -> void:
@@ -94,6 +99,7 @@ func dev_action(name: String) -> void:
 	match name:
 		"pretest": show_pretest()
 		"settings": show_settings()
+		"history": show_history()
 		"load": (_card as PreTestCard).load_pdf(ProjectSettings.globalize_path("res://tests/fixtures/mc_letter.pdf"))
 		"badpdf": (_card as PreTestCard).load_pdf(ProjectSettings.globalize_path("res://tests/fixtures/encrypted.pdf"))
 		"start": for b in _card.find_children("*", "Button", true, false):

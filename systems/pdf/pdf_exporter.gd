@@ -77,10 +77,57 @@ static func _draw_ink(page: PDFPage, ink: PageInk) -> void:
 			pts = PackedVector2Array([pts[0], pts[0] + Vector2(0.01, 0)])
 		page.add_path(pts, Color(0, 0, 0, 0), GRAPHITE, _mean_width(s), false)
 	for t in ink.texts:
-		for g in HandwritingLayout.layout(t.text, t.origin, t.size_pt, t.font_id, t.seed, 100000.0):
-			if g.ch == " " or g.ch == "\n":
-				continue
-			page.add_text(g.ch, g.pos, _font_path(g.font), t.size_pt * g.scale, TEXT_COLOR, PDFPage.ALIGN_LEFT, false, false)
+		_draw_text_mark(page, t)
+
+
+const TEXT_DPI := 300.0
+const HIDDEN := Color(0, 0, 0, 0)
+
+
+## A typed answer: the handwriting as a small cropped image (embedding the handwriting font costs
+## ~200 KB per add_text call), plus the same words as invisible standard-font text so an AI
+## marker can read them exactly.
+static func _draw_text_mark(page: PDFPage, t: TextMark) -> void:
+	var size := page.get_page_size()
+	var glyphs := HandwritingLayout.layout(t.text, t.origin, t.size_pt, t.font_id, t.seed, size.x - 36.0)
+	if glyphs.is_empty():
+		return
+	var bounds := Rect2(glyphs[0].pos, Vector2.ZERO)
+	for g in glyphs:
+		bounds = bounds.expand(g.pos + Vector2(0, -t.size_pt)).expand(g.pos + Vector2(g.advance, t.size_pt * 0.4))
+	bounds = bounds.grow(2.0)
+	var k := TEXT_DPI / 72.0
+	var img := Image.create(maxi(int(ceil(bounds.size.x * k)), 1), maxi(int(ceil(bounds.size.y * k)), 1), false, Image.FORMAT_RGBA8)
+	img.fill(Color(TEXT_COLOR, 0.0))
+	var shifted: Array[GlyphPlacement] = []
+	for g in glyphs:
+		var c := GlyphPlacement.new()
+		c.ch = g.ch
+		c.pos = g.pos - bounds.position
+		c.rot_deg = g.rot_deg
+		c.scale = g.scale
+		c.font = g.font
+		c.line = g.line
+		c.advance = g.advance
+		shifted.append(c)
+	InkRasterizer.rasterize_text(img, shifted, t.size_pt, TEXT_DPI, TEXT_COLOR)
+	InkRasterizer.embolden(img)
+	page.add_image(img, bounds, false, 1.0)
+	# Invisible, extractable text, one call per line.
+	var line := -1
+	var text := ""
+	var origin := Vector2.ZERO
+	for g in glyphs:
+		if g.line != line:
+			if text.strip_edges() != "":
+				page.add_text(text, origin, "Helvetica", t.size_pt * 0.75, HIDDEN, PDFPage.ALIGN_LEFT, false, false)
+			line = g.line
+			text = ""
+			origin = g.pos
+		if g.ch != "\n":
+			text += g.ch
+	if text.strip_edges() != "":
+		page.add_text(text, origin, "Helvetica", t.size_pt * 0.75, HIDDEN, PDFPage.ALIGN_LEFT, false, false)
 
 
 static func _mean_width(s: Stroke) -> float:
@@ -90,13 +137,6 @@ static func _mean_width(s: Stroke) -> float:
 	for w in s.widths:
 		total += w
 	return total / s.widths.size()
-
-
-## TTF path for the glyph's font (emboldened variations export as their base font).
-static func _font_path(f: Font) -> String:
-	if f is FontVariation and (f as FontVariation).base_font:
-		return (f as FontVariation).base_font.resource_path
-	return f.resource_path
 
 
 static func _same_file(a: String, b: String) -> bool:

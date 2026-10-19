@@ -519,8 +519,11 @@ For each page with marks:
    stroke's mean width, smoothed like on screen). PDFium-GDE v1.1 exposes `add_path` (found when the
    extension was introspected), so marks stay crisp at any zoom. The CPU rasterizer is kept for the
    image-only fallback (§3.2) and for overview thumbnails.
-3. Add typed text as **real text objects** (`add_text`) with the chosen handwriting font, one call per glyph
-   so the jitter matches what was on screen. Real text means an AI marker can read typed answers exactly.
+3. Add each typed answer as **its handwriting drawn into a small cropped 300-DPI image** (`add_image`)
+   **plus the same words as invisible standard-font text** (`add_text`, Helvetica, fully transparent).
+   Embedding the handwriting TTF costs about 200 KB per `add_text` call, so the visible handwriting is an
+   image while the invisible text layer lets an AI marker read typed answers exactly. Five answers add
+   about 35 KB.
 4. Append scratch sheets as extra blank pages with their marks.
 5. Save to the chosen path. Erase ghosts are not exported.
 

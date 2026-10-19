@@ -17,11 +17,13 @@ var paper_dpi: float = 150.0
 var _settle_left: float = 0.0
 var _autosave_left: float = AUTOSAVE_S
 var _facedown: PaperPage
+var _facedown_tween: Tween
 var _speech: Label3D
 var _speech_tween: Tween
 var _bell: AudioStreamPlayer
 var _fade: ColorRect
 var _handing_in: bool = false
+var _page_time: PageTimeTracker
 
 
 func _ready() -> void:
@@ -46,6 +48,8 @@ func _ready() -> void:
 	Session.timer.test_ended.connect(_on_test_ended)
 	Session.timer.grace_ended.connect(_on_grace_ended)
 	Session.finishing.connect(rig.commit_in_progress)
+	Session.finishing.connect(_store_page_time)
+	_page_time = PageTimeTracker.new(Session.attempt.pages.size(), Session.attempt.page_time_s)
 	room.wall_clock.visible = Session.options.get("clock", "wall") == "wall"
 	room.board.set_lines(BoardText.format(int(Session.options.start_minute), float(Session.options.duration_s)),
 		"No talking. Raise your hand if you have a question.")
@@ -63,6 +67,12 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if Session.finishing.is_connected(rig.commit_in_progress):
 		Session.finishing.disconnect(rig.commit_in_progress)
+	if Session.finishing.is_connected(_store_page_time):
+		Session.finishing.disconnect(_store_page_time)
+
+
+func _store_page_time() -> void:
+	Session.attempt.page_time_s = _page_time.totals()
 
 
 func _build_packet() -> void:
@@ -125,6 +135,7 @@ func _slide_in_facedown() -> void:
 	_facedown.global_transform = target.translated(Vector3(0.0, 0.01, -0.45))
 	_facedown.visible = false
 	var t := create_tween()
+	_facedown_tween = t
 	t.tween_interval(6.0)  # the teacher works their way down the row (Plan 3 animates them)
 	t.tween_callback(func() -> void: _facedown.visible = true)
 	t.tween_property(_facedown, "global_transform", target.translated(Vector3(0, 0.001, 0)), 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -139,9 +150,12 @@ func _process(delta: float) -> void:
 			_start_test()
 		return
 	if Session.machine.state == SessionMachine.State.TESTING or Session.machine.state == SessionMachine.State.GRACE:
+		if not Session.timer.is_paused():
+			_page_time.tick(delta, packet.state.active_target())
 		_autosave_left -= delta
 		if _autosave_left <= 0.0:
 			_autosave_left = AUTOSAVE_S
+			_store_page_time()
 			Session.autosave()
 
 
@@ -157,12 +171,18 @@ func _start_test() -> void:
 	_bell.stream = BELL_START
 	_bell.play()
 	say("You may begin.")
+	if _facedown_tween and _facedown_tween.is_valid():
+		_facedown_tween.kill()
 	if _facedown:
 		_facedown.queue_free()
 		_facedown = null
 	packet.visible = true
 	rig.input_enabled = true
 	Session.start_test()
+
+
+func facedown_pending() -> bool:
+	return _facedown_tween != null and _facedown_tween.is_valid() and _facedown_tween.is_running()
 
 
 func _on_warning(minutes: int) -> void:
@@ -207,3 +227,16 @@ func dev_action(name: String) -> void:
 		"lookup": rig.set_view(PlayerRig.View.LOOK_UP)
 		"handin": hand_in()
 		"warn": _on_warning(15)
+		"sample": _dev_sample_ink()
+
+
+## Dev-only: fill in a few answers so the review screen has something to show.
+func _dev_sample_ink() -> void:
+	var page := Session.attempt.pages[0]
+	for q in 4:
+		var c := Vector2(100 + [1, 3, 0, 2][q] * 50, 110 + q * 66)
+		var s := ScribbleGen.scribble_for(Rect2(c - Vector2(7, 7), Vector2(14, 14)), q)
+		rig.commit_external_stroke("page:0", s)
+	rig.handwriting.begin_at(Vector2(290, 376))
+	rig.handwriting.entry.insert("x = 7 because 3(7) − 2 = 19")
+	rig.handwriting.commit_all()

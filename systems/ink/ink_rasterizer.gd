@@ -110,3 +110,24 @@ static func _font_file(f: Font) -> FontFile:
 	if f is FontVariation and (f as FontVariation).base_font is FontFile:
 		return (f as FontVariation).base_font
 	return null
+
+
+## Thickens glyph coverage by one pixel (max filter), matching the slightly heavier pencil weight
+## the on-screen handwriting uses.
+static func embolden(img: Image) -> void:
+	var src := img.duplicate() as Image
+	var w := img.get_width()
+	var h := img.get_height()
+	for y in h:
+		for x in w:
+			var a := src.get_pixel(x, y).a
+			for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var nx: int = x + o.x
+				var ny: int = y + o.y
+				if nx >= 0 and ny >= 0 and nx < w and ny < h:
+					a = maxf(a, src.get_pixel(nx, ny).a * 0.85)
+			if a > 0.0:
+				var c := src.get_pixel(x, y)
+				if c.a <= 0.0:
+					c = Color(img.get_pixel(x, y), 0.0)
+				img.set_pixel(x, y, Color(c.r, c.g, c.b, a))

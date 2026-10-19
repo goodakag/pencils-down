@@ -110,3 +110,21 @@ func test_golden_page() -> void:
 	var mean := float(total) / a.size()
 	gut.p("golden mean abs diff: %.3f" % mean)
 	assert_lt(mean, 2.0)
+
+func test_typed_answers_keep_file_small() -> void:
+	var doc := _doc("mc_letter.pdf")
+	var base := FileAccess.get_file_as_bytes(doc.path).size()
+	var a := Attempt.create(doc, {"scratch_sheets": 0})
+	for i in 5:
+		var t := TextMark.new()
+		t.id = i + 1
+		t.origin = Vector2(290, 120 + i * 66)
+		t.size_pt = 15.0
+		t.text = "x = 7 because 3(7) - 2 = 19"
+		t.seed = i
+		a.pages[0].texts.append(t)
+	var r := PdfExporter.export(doc, a, _out("small.pdf"))
+	assert_true(r.ok, str(r))
+	var added := FileAccess.get_file_as_bytes(_out("small.pdf")).size() - base
+	gut.p("5 typed answers added %d bytes" % added)
+	assert_lt(added, 400_000)

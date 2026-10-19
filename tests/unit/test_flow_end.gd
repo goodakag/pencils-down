@@ -48,3 +48,12 @@ func test_greybox_satisfies_contract() -> void:
 	add_child_autofree(g)
 	assert_eq(g.validate(), PackedStringArray())
 	assert_eq(g.student_seats.size(), 24)
+
+func test_skipping_settling_cancels_facedown_delivery() -> void:
+	var doc := PdfDoc.open(ProjectSettings.globalize_path("res://tests/fixtures/mc_letter.pdf"))
+	Session.begin(doc, {"duration_s": 600.0, "grace_s": 30.0, "scratch_sheets": 0})
+	var flow: TestFlow = load("res://scenes/flow/test_scene.tscn").instantiate()
+	flow.paper_dpi = 72.0
+	add_child_autofree(flow)
+	flow._start_test()  # Space pressed before the 6 s delivery
+	assert_false(flow.facedown_pending(), "delivery tween must not fire after the test starts")
