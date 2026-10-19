@@ -24,6 +24,8 @@ var _bell: AudioStreamPlayer
 var _fade: ColorRect
 var _handing_in: bool = false
 var _page_time: PageTimeTracker
+var _menu_holder: CenterContainer
+var _menu_dim: ColorRect
 
 
 func _ready() -> void:
@@ -43,6 +45,16 @@ func _ready() -> void:
 	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_fade)
 	create_tween().tween_property(_fade, "color:a", 0.0, 1.2)
+	_menu_dim = ColorRect.new()
+	_menu_dim.color = Color(0.1, 0.09, 0.08, 0.45)
+	_menu_dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_menu_dim.visible = false
+	layer.add_child(_menu_dim)
+	_menu_holder = CenterContainer.new()
+	_menu_holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_menu_holder.theme = CozyTheme.get_theme()
+	_menu_holder.visible = false
+	layer.add_child(_menu_holder)
 
 	Session.timer.warning.connect(_on_warning)
 	Session.timer.test_ended.connect(_on_test_ended)
@@ -87,9 +99,7 @@ func _build_packet() -> void:
 	rig.global_transform = seat
 	rig.setup(packet, Session.attempt, Session.doc)
 	rig.elapsed_provider = func() -> float: return Session.timer.elapsed()
-	rig.font_id = StringName(Settings.get_value("writing/font"))
-	rig.edge_look.enabled = bool(Settings.get_value("input/edge_look"))
-	rig.pencil.set_left_handed(Settings.get_value("writing/hand") == "left")
+	_apply_settings()
 
 
 func _build_speech() -> void:
@@ -163,8 +173,69 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _settle_left > 0.0 and event.is_action_pressed("look_up"):
 		_settle_left = 0.01  # Space skips the settling-in
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("hand_in"):
+	elif event.is_action_pressed("menu") and not rig.typing:
+		get_viewport().set_input_as_handled()
+		if _menu_holder.visible:
+			close_menu()
+		else:
+			open_menu()
+	elif event.is_action_pressed("hand_in") and not rig.typing:
 		hand_in()
+
+
+## Esc: Practice pauses the clock; Strict keeps it running and says so.
+func open_menu() -> void:
+	var st := Session.machine.state
+	if not (st == SessionMachine.State.TESTING or st == SessionMachine.State.GRACE):
+		return
+	Session.timer.pause()
+	rig.input_enabled = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_menu_dim.visible = true
+	_menu_holder.visible = true
+	_show_pause_card()
+
+
+func _show_pause_card() -> void:
+	for c in _menu_holder.get_children():
+		c.queue_free()
+	var card := PauseCard.new()
+	card.strict = not Session.timer.pausable
+	card.resume.connect(close_menu)
+	card.settings.connect(func() -> void:
+		for c in _menu_holder.get_children():
+			c.queue_free()
+		var sc := SettingsCard.new()
+		sc.back.connect(func() -> void:
+			_apply_settings()
+			_show_pause_card())
+		_menu_holder.add_child(sc))
+	card.quit_test.connect(_save_and_quit)
+	_menu_holder.add_child(card)
+
+
+func close_menu() -> void:
+	for c in _menu_holder.get_children():
+		c.queue_free()
+	_menu_dim.visible = false
+	_menu_holder.visible = false
+	Session.timer.unpause()
+	rig.input_enabled = not _handing_in
+
+
+func _apply_settings() -> void:
+	rig.font_id = StringName(Settings.get_value("writing/font"))
+	rig.edge_look.enabled = bool(Settings.get_value("input/edge_look"))
+	rig.pencil.set_left_handed(Settings.get_value("writing/hand") == "left")
+
+
+func _save_and_quit() -> void:
+	rig.commit_in_progress()
+	_store_page_time()
+	Session.timer.unpause()
+	Session.autosave()
+	Session.machine.abort()
+	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 
 func _start_test() -> void:
@@ -226,6 +297,7 @@ func dev_action(name: String) -> void:
 		"skip": _settle_left = 0.01
 		"lookup": rig.set_view(PlayerRig.View.LOOK_UP)
 		"handin": hand_in()
+		"menu": open_menu()
 		"warn": _on_warning(15)
 		"sample": _dev_sample_ink()
 

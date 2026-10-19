@@ -44,6 +44,27 @@ func _make_timer(o: Dictionary) -> ExamTimer:
 	return t
 
 
+## Restores an autosaved attempt straight into the test (no settling, no start bell).
+## Returns false when the original PDF can't be opened.
+func resume(a: Attempt) -> bool:
+	var d := PdfService.open(a.pdf_path)
+	if d == null:
+		return false
+	machine.abort()
+	doc = d
+	attempt = a
+	options = DEFAULT_OPTIONS.duplicate(true)
+	options.merge(a.options, true)
+	timer = ExamTimer.from_dict(a.timer_state)
+	timer.pausable = options.mode == "practice"
+	pre_roll_s = 0.0
+	last_archive_path = ""
+	machine.transition_to(SessionMachine.State.TESTING)
+	if timer.phase() == ExamTimer.Phase.GRACE:
+		machine.transition_to(SessionMachine.State.GRACE)
+	return true
+
+
 func start_test() -> void:
 	pre_roll_s = 0.0
 	timer.start()

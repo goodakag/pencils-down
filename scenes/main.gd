@@ -85,7 +85,13 @@ func show_history() -> void:
 
 
 func resume() -> void:
-	pass  # Task 18
+	var a := Session.store.load_autosave()
+	if a and Session.resume(a):
+		get_tree().change_scene_to_file(TEST_SCENE)
+		return
+	var m := _card as MainMenuCard
+	if m:
+		m.show_notice("Can't find the original PDF for the test in progress%s." % ((" at " + a.pdf_path) if a else ""))
 
 
 func start_test(doc: PdfDoc, options: Dictionary) -> void:
@@ -100,6 +106,7 @@ func dev_action(name: String) -> void:
 		"pretest": show_pretest()
 		"settings": show_settings()
 		"history": show_history()
+		"resume": resume()
 		"load": (_card as PreTestCard).load_pdf(ProjectSettings.globalize_path("res://tests/fixtures/mc_letter.pdf"))
 		"badpdf": (_card as PreTestCard).load_pdf(ProjectSettings.globalize_path("res://tests/fixtures/encrypted.pdf"))
 		"start": for b in _card.find_children("*", "Button", true, false):
