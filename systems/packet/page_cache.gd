@@ -14,6 +14,7 @@ var _thumbs: Dictionary = {}   # index -> ImageTexture
 var _window := Vector2i(0, -1)
 var _mutex := Mutex.new()      # PDFium calls are serialized
 var _ready_images: Dictionary = {}  # index -> Image rendered by a worker
+var _arrived: bool = false  # a full-res texture arrived since the last poll()
 
 
 func _init(doc: PdfDoc, full_dpi: float, thumb_dpi: float = 24.0) -> void:
@@ -82,6 +83,7 @@ func _collect_finished() -> void:
 			_mutex.unlock()
 			if img and i >= _window.x and i <= _window.y:
 				_full[i] = ImageTexture.create_from_image(img)
+				_arrived = true
 
 
 func _thumb(i: int) -> Texture2D:
@@ -97,8 +99,10 @@ func _render(i: int, dpi: float) -> Image:
 	return img
 
 
-## Call every frame: picks up finished background renders. Returns true when something changed.
+## Call every frame: picks up finished background renders. Returns true once after new full-res
+## textures arrive, even if another call collected them first.
 func poll() -> bool:
-	var before := _full.size()
 	_collect_finished()
-	return _full.size() != before
+	var arrived := _arrived
+	_arrived = false
+	return arrived

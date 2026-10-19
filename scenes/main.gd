@@ -107,7 +107,7 @@ func dev_action(name: String) -> void:
 		"settings": show_settings()
 		"history": show_history()
 		"resume": resume()
-		"load": (_card as PreTestCard).load_pdf(ProjectSettings.globalize_path("res://tests/fixtures/mc_letter.pdf"))
+		"load": (_card as PreTestCard).load_pdf(_dev_pdf())
 		"badpdf": (_card as PreTestCard).load_pdf(ProjectSettings.globalize_path("res://tests/fixtures/encrypted.pdf"))
 		"start": for b in _card.find_children("*", "Button", true, false):
 			if (b as Button).text == "Take your seat":
@@ -115,3 +115,10 @@ func dev_action(name: String) -> void:
 		"more": for b in _card.find_children("*", "Button", true, false):
 			if (b as Button).text.ends_with("More options"):
 				(b as Button).pressed.emit()
+
+
+func _dev_pdf() -> String:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--pdf="):
+			return a.trim_prefix("--pdf=")
+	return ProjectSettings.globalize_path("res://tests/fixtures/mc_letter.pdf")

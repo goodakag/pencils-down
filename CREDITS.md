@@ -25,3 +25,19 @@ License texts are in `assets/fonts/OFL-<family>.txt`.
 | PDFium-GDE | Zlib | https://github.com/aliarcanakgun/pdfium-gde |
 | PDFium | Apache-2.0 | https://pdfium.googlesource.com/pdfium/ |
 | GUT (Godot Unit Test) | MIT | https://github.com/bitwes/Gut |
+
+## Sounds
+
+| Sound | License | Source |
+|---|---|---|
+| Start and end bells (placeholder) | CC0 | Synthesized by `tools/make_bells.py` |
+
+## Textures
+
+The paper fiber is generated procedurally in `scenes/packet/paper_page.gdshader` (no texture asset).
+
+## Development tools (not shipped)
+
+| Tool | License | Use |
+|---|---|---|
+| reportlab, pypdf, Pillow | BSD / BSD / HPND | generating the test-fixture PDFs |
