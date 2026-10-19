@@ -152,8 +152,8 @@ paper-card panel on top (see §7). The pre-test card has, top to bottom:
 Everything is remembered, so a returning player only drops a PDF and presses Start.
 
 ### 4.2 Settling in (~20 s, skippable with Space)
-Fade in, seated at the desk (middle row, slightly off-center, so most of the room and the clock are
-visible when you look up). Other students settle, chairs scrape, someone unzips a bag. The teacher walks
+Fade in, seated at the desk (middle row, one column in from the windows, so morning sun falls across
+your desk and the clock is straight ahead when you look up). Other students settle, chairs scrape, someone unzips a bag. The teacher walks
 the rows placing tests **face-down** on desks, ending at yours: the packet slides onto your desk. The teacher
 writes on the whiteboard:
 
