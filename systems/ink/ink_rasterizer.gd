@@ -61,3 +61,52 @@ static func _capsule(data: PackedByteArray, w: int, h: int, a: Vector2, b: Vecto
 			var v := int(cov * max_a * 255.0 + 0.5)
 			if v > data[idx]:
 				data[idx] = v
+
+
+## Draws handwritten glyphs into `img` (RGBA8) from the fonts' CPU glyph caches (works headless).
+## Rotation jitter is ignored; position and scale are kept.
+static func rasterize_text(img: Image, placements: Array[GlyphPlacement], size_pt: float, dpi: float, color: Color) -> void:
+	var k := dpi / 72.0
+	for g in placements:
+		if g.ch == " " or g.ch == "\n":
+			continue
+		var ff := _font_file(g.font)
+		if ff == null:
+			continue
+		var fs := maxi(int(round(size_pt * g.scale * k)), 4)
+		var sz := Vector2i(fs, 0)
+		var gi := ff.get_glyph_index(fs, g.ch.unicode_at(0), 0)
+		ff.render_glyph(0, sz, gi)
+		var tex := ff.get_glyph_texture_idx(0, sz, gi)
+		if tex < 0:
+			continue
+		var atlas := ff.get_texture_image(0, sz, tex)
+		var uv := Rect2i(ff.get_glyph_uv_rect(0, sz, gi))
+		if atlas == null or uv.size.x <= 0 or uv.size.y <= 0:
+			continue
+		var glyph := atlas.get_region(uv)
+		var luminance_coverage := glyph.get_format() == Image.FORMAT_L8
+		var origin := Vector2i((g.pos * k + ff.get_glyph_offset(0, sz, gi)).round())
+		for y in glyph.get_height():
+			var dy := origin.y + y
+			if dy < 0 or dy >= img.get_height():
+				continue
+			for x in glyph.get_width():
+				var dx := origin.x + x
+				if dx < 0 or dx >= img.get_width():
+					continue
+				var px := glyph.get_pixel(x, y)
+				var cov := px.r if luminance_coverage else px.a
+				if cov <= 0.0:
+					continue
+				var a := cov * color.a
+				if a > img.get_pixel(dx, dy).a:
+					img.set_pixel(dx, dy, Color(color.r, color.g, color.b, a))
+
+
+static func _font_file(f: Font) -> FontFile:
+	if f is FontFile:
+		return f
+	if f is FontVariation and (f as FontVariation).base_font is FontFile:
+		return (f as FontVariation).base_font
+	return null
