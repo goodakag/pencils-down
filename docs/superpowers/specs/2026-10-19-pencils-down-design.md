@@ -515,12 +515,15 @@ and a `lighting_preset` (lightmap bake + sky + sun). Swapping environments needs
 ### 10.3 Export
 For each page with marks:
 1. Open the original PDF through PDFium-GDE.
-2. Rasterize the page's pencil strokes on the CPU into a **transparent 300-DPI image** (graphite color
-   `#3B3A3C` at 92% opacity, round caps, widths from the stroke data) and place it over the full page with
-   `add_image`. PDFium-GDE has no freehand path API, so the original test stays vector and only the pencil
-   layer is an image. (A vector path API can be added to a fork later without changing the data model.)
-3. Add typed text as **real text objects** (`add_text`) with the chosen handwriting font, one call per glyph
-   so the jitter matches what was on screen. Real text means an AI marker can read typed answers exactly.
+2. Add each pencil stroke as a **vector path** (`add_path`, graphite `#3B3A3C` at 92% opacity, the
+   stroke's mean width, smoothed like on screen). PDFium-GDE v1.1 exposes `add_path` (found when the
+   extension was introspected), so marks stay crisp at any zoom. The CPU rasterizer is kept for the
+   image-only fallback (§3.2) and for overview thumbnails.
+3. Add each typed answer as **its handwriting drawn into a small cropped 300-DPI image** (`add_image`)
+   **plus the same words as invisible standard-font text** (`add_text`, Helvetica, fully transparent).
+   Embedding the handwriting TTF costs about 200 KB per `add_text` call, so the visible handwriting is an
+   image while the invisible text layer lets an AI marker read typed answers exactly. Five answers add
+   about 35 KB.
 4. Append scratch sheets as extra blank pages with their marks.
 5. Save to the chosen path. Erase ghosts are not exported.
 

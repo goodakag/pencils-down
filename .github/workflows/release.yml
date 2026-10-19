@@ -1,0 +1,48 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GODOT_VERSION: 4.7.2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Godot and export templates
+        run: |
+          curl -sSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip && mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot && chmod +x godot
+          curl -sSL -o templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          unzip -q templates.tpz -d tpl && mv tpl/templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          rm templates.tpz
+      - name: Fetch PDFium-GDE
+        run: bash tools/fetch_pdfium_gde.sh
+      - name: Import and test
+        run: |
+          ./godot --headless --path . --import || true
+          ./godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -ginclude_subdirs -gexit
+      - name: Export
+        run: |
+          mkdir -p build/windows build/macos build/linux
+          ./godot --headless --path . --export-release "Windows Desktop" build/windows/PencilsDown.exe
+          ./godot --headless --path . --export-release "macOS" build/macos/PencilsDown.zip
+          ./godot --headless --path . --export-release "Linux" build/linux/PencilsDown.x86_64
+      - name: Package
+        run: |
+          V="${GITHUB_REF_NAME}"
+          (cd build/windows && zip -qr "../../PencilsDown-${V}-windows-x86_64.zip" .)
+          cp build/macos/PencilsDown.zip "PencilsDown-${V}-macos-universal.zip"
+          tar -czf "PencilsDown-${V}-linux-x86_64.tar.gz" -C build/linux .
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" PencilsDown-*.zip PencilsDown-*.tar.gz \
+            --title "Pencils Down ${GITHUB_REF_NAME}" --generate-notes

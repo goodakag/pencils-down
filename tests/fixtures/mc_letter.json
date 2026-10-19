@@ -1,0 +1,804 @@
+{
+ "bubbles": [
+  {
+   "page": 0,
+   "question": 1,
+   "choice": "A",
+   "center": [
+    100,
+    110
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 1,
+   "choice": "B",
+   "center": [
+    150,
+    110
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 1,
+   "choice": "C",
+   "center": [
+    200,
+    110
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 1,
+   "choice": "D",
+   "center": [
+    250,
+    110
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 2,
+   "choice": "A",
+   "center": [
+    100,
+    176
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 2,
+   "choice": "B",
+   "center": [
+    150,
+    176
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 2,
+   "choice": "C",
+   "center": [
+    200,
+    176
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 2,
+   "choice": "D",
+   "center": [
+    250,
+    176
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 3,
+   "choice": "A",
+   "center": [
+    100,
+    242
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 3,
+   "choice": "B",
+   "center": [
+    150,
+    242
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 3,
+   "choice": "C",
+   "center": [
+    200,
+    242
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 3,
+   "choice": "D",
+   "center": [
+    250,
+    242
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 4,
+   "choice": "A",
+   "center": [
+    100,
+    308
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 4,
+   "choice": "B",
+   "center": [
+    150,
+    308
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 4,
+   "choice": "C",
+   "center": [
+    200,
+    308
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 4,
+   "choice": "D",
+   "center": [
+    250,
+    308
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 5,
+   "choice": "A",
+   "center": [
+    100,
+    374
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 5,
+   "choice": "B",
+   "center": [
+    150,
+    374
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 5,
+   "choice": "C",
+   "center": [
+    200,
+    374
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 5,
+   "choice": "D",
+   "center": [
+    250,
+    374
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 6,
+   "choice": "A",
+   "center": [
+    100,
+    440
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 6,
+   "choice": "B",
+   "center": [
+    150,
+    440
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 6,
+   "choice": "C",
+   "center": [
+    200,
+    440
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 6,
+   "choice": "D",
+   "center": [
+    250,
+    440
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 7,
+   "choice": "A",
+   "center": [
+    100,
+    506
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 7,
+   "choice": "B",
+   "center": [
+    150,
+    506
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 7,
+   "choice": "C",
+   "center": [
+    200,
+    506
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 7,
+   "choice": "D",
+   "center": [
+    250,
+    506
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 8,
+   "choice": "A",
+   "center": [
+    100,
+    572
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 8,
+   "choice": "B",
+   "center": [
+    150,
+    572
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 8,
+   "choice": "C",
+   "center": [
+    200,
+    572
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 8,
+   "choice": "D",
+   "center": [
+    250,
+    572
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 9,
+   "choice": "A",
+   "center": [
+    100,
+    638
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 9,
+   "choice": "B",
+   "center": [
+    150,
+    638
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 9,
+   "choice": "C",
+   "center": [
+    200,
+    638
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 9,
+   "choice": "D",
+   "center": [
+    250,
+    638
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 10,
+   "choice": "A",
+   "center": [
+    100,
+    704
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 10,
+   "choice": "B",
+   "center": [
+    150,
+    704
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 10,
+   "choice": "C",
+   "center": [
+    200,
+    704
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 0,
+   "question": 10,
+   "choice": "D",
+   "center": [
+    250,
+    704
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 11,
+   "choice": "A",
+   "center": [
+    100,
+    110
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 11,
+   "choice": "B",
+   "center": [
+    150,
+    110
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 11,
+   "choice": "C",
+   "center": [
+    200,
+    110
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 11,
+   "choice": "D",
+   "center": [
+    250,
+    110
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 12,
+   "choice": "A",
+   "center": [
+    100,
+    176
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 12,
+   "choice": "B",
+   "center": [
+    150,
+    176
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 12,
+   "choice": "C",
+   "center": [
+    200,
+    176
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 12,
+   "choice": "D",
+   "center": [
+    250,
+    176
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 13,
+   "choice": "A",
+   "center": [
+    100,
+    242
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 13,
+   "choice": "B",
+   "center": [
+    150,
+    242
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 13,
+   "choice": "C",
+   "center": [
+    200,
+    242
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 13,
+   "choice": "D",
+   "center": [
+    250,
+    242
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 14,
+   "choice": "A",
+   "center": [
+    100,
+    308
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 14,
+   "choice": "B",
+   "center": [
+    150,
+    308
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 14,
+   "choice": "C",
+   "center": [
+    200,
+    308
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 14,
+   "choice": "D",
+   "center": [
+    250,
+    308
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 15,
+   "choice": "A",
+   "center": [
+    100,
+    374
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 15,
+   "choice": "B",
+   "center": [
+    150,
+    374
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 15,
+   "choice": "C",
+   "center": [
+    200,
+    374
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 15,
+   "choice": "D",
+   "center": [
+    250,
+    374
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 16,
+   "choice": "A",
+   "center": [
+    100,
+    440
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 16,
+   "choice": "B",
+   "center": [
+    150,
+    440
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 16,
+   "choice": "C",
+   "center": [
+    200,
+    440
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 16,
+   "choice": "D",
+   "center": [
+    250,
+    440
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 17,
+   "choice": "A",
+   "center": [
+    100,
+    506
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 17,
+   "choice": "B",
+   "center": [
+    150,
+    506
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 17,
+   "choice": "C",
+   "center": [
+    200,
+    506
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 17,
+   "choice": "D",
+   "center": [
+    250,
+    506
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 18,
+   "choice": "A",
+   "center": [
+    100,
+    572
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 18,
+   "choice": "B",
+   "center": [
+    150,
+    572
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 18,
+   "choice": "C",
+   "center": [
+    200,
+    572
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 18,
+   "choice": "D",
+   "center": [
+    250,
+    572
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 19,
+   "choice": "A",
+   "center": [
+    100,
+    638
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 19,
+   "choice": "B",
+   "center": [
+    150,
+    638
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 19,
+   "choice": "C",
+   "center": [
+    200,
+    638
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 19,
+   "choice": "D",
+   "center": [
+    250,
+    638
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 20,
+   "choice": "A",
+   "center": [
+    100,
+    704
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 20,
+   "choice": "B",
+   "center": [
+    150,
+    704
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 20,
+   "choice": "C",
+   "center": [
+    200,
+    704
+   ],
+   "r": 7.0
+  },
+  {
+   "page": 1,
+   "question": 20,
+   "choice": "D",
+   "center": [
+    250,
+    704
+   ],
+   "r": 7.0
+  }
+ ]
+}
