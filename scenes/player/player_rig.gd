@@ -28,6 +28,10 @@ var doc: PdfDoc
 var elapsed_provider: Callable = func() -> float: return 0.0
 var input_enabled: bool = true
 var edge_look := EdgeLook.new()
+var font_id: StringName = &"caveat"
+var typing: bool = false
+var pencil_override_pt: Variant = null  # set while the hand writes a typed answer
+var handwriting: HandwritingNode
 
 var camera: Camera3D
 var pencil: PencilModel
@@ -61,6 +65,9 @@ func setup(p: TestPacket, a: Attempt, d: PdfDoc) -> void:
 	attempt = a
 	doc = d
 	packet.target_changed.connect(func(_k: String) -> void: _cancel_stroke())
+	handwriting = HandwritingNode.new()
+	handwriting.rig = self
+	add_child(handwriting)
 
 
 func _process(delta: float) -> void:
@@ -153,7 +160,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _on_key(k: InputEventKey) -> void:
-	if k.ctrl_pressed and k.physical_keycode == KEY_Z:
+	if typing:
+		return
+	if k.is_action("type_mode"):
+		var p: Variant = pointer_pt()
+		if p != null:
+			_cancel_stroke()
+			handwriting.begin_at(p)
+	elif k.ctrl_pressed and k.physical_keycode == KEY_Z:
 		undo()
 	elif k.ctrl_pressed and k.physical_keycode == KEY_Y:
 		redo()
@@ -189,6 +203,18 @@ func _on_mouse_button(b: InputEventMouseButton) -> void:
 			if i >= 0:
 				packet.set_overview(false)
 				packet.jump(i)
+		return
+	if b.button_index == MOUSE_BUTTON_LEFT and b.pressed and b.double_click:
+		_ink.cancel()
+		var p: Variant = _pointer_pt(b.position)
+		if p != null:
+			handwriting.begin_at(p)
+		return
+	if b.button_index == MOUSE_BUTTON_LEFT and b.pressed and b.shift_pressed:
+		quick_fill(b.position)
+		return
+	if b.button_index == MOUSE_BUTTON_RIGHT and b.pressed and b.shift_pressed:
+		quick_clear(b.position)
 		return
 	if b.button_index == MOUSE_BUTTON_LEFT:
 		if b.pressed:
@@ -268,6 +294,68 @@ func _commit_stroke(s: Stroke) -> void:
 func commit_external_stroke(key: String, s: Stroke) -> void:
 	_ink.page_key = key
 	_commit_stroke(s)
+
+
+# --- Quick Fill ----------------------------------------------------------------------------------
+
+const QUICK_FILL_TIME := 0.6
+var _page_images: Dictionary = {}  # page index -> Image at 144 DPI, for bubble detection
+var _fill_tween: Tween
+
+
+func _bubble_rect(p: Vector2) -> Rect2:
+	var key := packet.state.active_key()
+	if key.begins_with("page:") and doc != null:
+		var i := int(key.split(":")[1])
+		if not _page_images.has(i):
+			_page_images[i] = doc.render_page(i, 144.0)
+		return BubbleDetector.find(doc.text_words(i), _page_images[i], 2.0, p)
+	return BubbleDetector.find([], null, 2.0, p)
+
+
+## Shift+click: the hand scribbles the bubble in over 0.6 s.
+func quick_fill(screen: Vector2) -> void:
+	var p: Variant = _pointer_pt(screen)
+	if p == null:
+		return
+	_cancel_stroke()
+	var key := packet.state.active_key()
+	var s := ScribbleGen.scribble_for(_bubble_rect(p), randi())
+	var layer := packet.active_page().ink_layer()
+	if _fill_tween and _fill_tween.is_running():
+		_fill_tween.custom_step(10.0)
+	var partial := Stroke.new()
+	_fill_tween = create_tween()
+	_fill_tween.tween_method(func(t: float) -> void:
+		var n := maxi(int(ceil(t * s.points.size())), 1)
+		partial.points = s.points.slice(0, n)
+		partial.widths = s.widths.slice(0, n)
+		layer.live_stroke = partial
+		pencil_override_pt = partial.points[n - 1]
+		layer.refresh(), 0.0, 1.0, QUICK_FILL_TIME)
+	_fill_tween.tween_callback(func() -> void:
+		layer.live_stroke = null
+		pencil_override_pt = null
+		commit_external_stroke(key, s))
+
+
+## Shift+right-click: clears pencil marks inside the bubble.
+func quick_clear(screen: Vector2) -> void:
+	var p: Variant = _pointer_pt(screen)
+	if p == null:
+		return
+	var key := packet.state.active_key()
+	var page := attempt.ink_for(key)
+	var r := _bubble_rect(p).grow(1.0)
+	var before := page.to_dict()
+	var kept: Array[Stroke] = []
+	for s in page.strokes:
+		if not r.has_point(s.bounds().get_center()):
+			kept.append(s)
+	if kept.size() == page.strokes.size():
+		return
+	page.strokes = kept
+	commit_page_edit(key, before)
 
 
 # --- Eraser ------------------------------------------------------------------------------------
@@ -437,6 +525,9 @@ func _update_pencil() -> void:
 	if not pencil.visible:
 		return
 	var page := packet.active_page()
+	if pencil_override_pt != null:
+		pencil.global_position = page.to_global(page.pt_to_local(pencil_override_pt)) + Vector3(0, 0.0004, 0)
+		return
 	var hit: Variant = _ray_to_plane(_last_mouse, page.global_position.y)
 	if hit != null:
 		pencil.global_position = (hit as Vector3) + Vector3(0, 0.0004, 0)

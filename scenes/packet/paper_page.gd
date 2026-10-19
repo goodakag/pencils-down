@@ -85,3 +85,10 @@ func local_to_pt(local: Vector3) -> Vector2:
 	var m := size_m()
 	var uv := Vector2(local.x / m.x + 0.5, local.z / m.y + 0.5)
 	return PageMapper.uv_to_pt(uv, size_pt)
+
+
+## PDF points → local point on the flat page.
+func pt_to_local(p: Vector2) -> Vector3:
+	var m := size_m()
+	var uv := PageMapper.pt_to_uv(p, size_pt)
+	return Vector3((uv.x - 0.5) * m.x, 0.0, (uv.y - 0.5) * m.y)

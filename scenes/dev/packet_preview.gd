@@ -95,4 +95,43 @@ func dev_action(name: String) -> void:
 		"scratch": packet.toggle_scratch()
 		"overview": packet.set_overview(true)
 		"lookup": rig.set_view(PlayerRig.View.LOOK_UP)
+		"fill": _click_pt(Vector2(150, 7 * 0 + 80 + 4 * 66 + 30), true)
+		"type": _type_at(Vector2(290, 80 + 5 * 66 + 34), "x = 7 because 3(7) - 2 = 19")
 		"eraser": rig.pencil.set_eraser(true)
+
+
+func _screen_of(pt: Vector2) -> Vector2:
+	var page := packet.active_page()
+	return rig.camera.unproject_position(page.to_global(page.pt_to_local(pt)))
+
+
+func _click_pt(pt: Vector2, shift: bool) -> void:
+	var pos := _screen_of(pt)
+	var m := InputEventMouseMotion.new()
+	m.position = pos
+	get_viewport().push_input(m, true)
+	for pressed in [true, false]:
+		var b := InputEventMouseButton.new()
+		b.button_index = MOUSE_BUTTON_LEFT
+		b.position = pos
+		b.pressed = pressed
+		b.shift_pressed = shift
+		get_viewport().push_input(b, true)
+
+
+func _type_at(pt: Vector2, text: String) -> void:
+	var m := InputEventMouseMotion.new()
+	m.position = _screen_of(pt)
+	get_viewport().push_input(m, true)
+	_key(KEY_T, 0)
+	for ch in text:
+		_key(KEY_NONE, ch.unicode_at(0))
+
+
+func _key(code: Key, uni: int) -> void:
+	var k := InputEventKey.new()
+	k.pressed = true
+	k.physical_keycode = code
+	k.keycode = code
+	k.unicode = uni
+	get_viewport().push_input(k)

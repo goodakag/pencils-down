@@ -63,3 +63,13 @@ func test_auto_size() -> void:
 	assert_almost_eq(HandwritingLayout.auto_size(24.0), 14.88, 0.001)
 	assert_eq(HandwritingLayout.auto_size(4.0), 9.0)
 	assert_eq(HandwritingLayout.auto_size(80.0), 28.0)
+
+func _w(y: float) -> Dictionary:
+	return {"text": "word", "rect": Rect2(72, y - 5, 30, 10)}
+
+func test_line_spacing_near_uses_median_gap() -> void:
+	var words := [_w(100), _w(100), _w(124), _w(148), _w(172), _w(400)]
+	assert_almost_eq(HandwritingLayout.line_spacing_near(words, Vector2(80, 130)), 24.0, 0.01)
+
+func test_line_spacing_unknown_is_zero() -> void:
+	assert_eq(HandwritingLayout.line_spacing_near([_w(100)], Vector2(80, 100)), 0.0)

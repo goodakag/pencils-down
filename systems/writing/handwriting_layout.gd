@@ -120,3 +120,27 @@ static func _place(ch: String, pos: Vector2, adv: float, font: Font, line: int, 
 ## Text size from the page's line spacing (pt). Callers use 14.0 when the spacing is unknown.
 static func auto_size(line_spacing_pt: float) -> float:
 	return clampf(line_spacing_pt * 0.62, 9.0, 28.0)
+
+
+## Median gap between printed text lines within 60 pt (vertically) of `at`, or 0.0 if unknown.
+static func line_spacing_near(words: Array, at: Vector2) -> float:
+	var ys: Array[float] = []
+	for w in words:
+		var cy := (w.rect as Rect2).get_center().y
+		if absf(cy - at.y) > 60.0:
+			continue
+		var dup := false
+		for y in ys:
+			if absf(y - cy) < 2.0:
+				dup = true
+				break
+		if not dup:
+			ys.append(cy)
+	if ys.size() < 2:
+		return 0.0
+	ys.sort()
+	var gaps: Array[float] = []
+	for i in ys.size() - 1:
+		gaps.append(ys[i + 1] - ys[i])
+	gaps.sort()
+	return gaps[gaps.size() / 2]
