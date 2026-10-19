@@ -540,7 +540,7 @@ func last_mouse() -> Vector2:
 
 func _update_pencil() -> void:
 	var desk_like := view != View.LOOK_UP and view != View.STANDING
-	pencil.visible = desk_like and packet != null and not packet.is_overview()
+	pencil.visible = desk_like and input_enabled and packet != null and not packet.is_overview()
 	if not pencil.visible:
 		return
 	var page := packet.active_page()

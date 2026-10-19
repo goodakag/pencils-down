@@ -77,6 +77,9 @@ func _build_packet() -> void:
 	rig.global_transform = seat
 	rig.setup(packet, Session.attempt, Session.doc)
 	rig.elapsed_provider = func() -> float: return Session.timer.elapsed()
+	rig.font_id = StringName(Settings.get_value("writing/font"))
+	rig.edge_look.enabled = bool(Settings.get_value("input/edge_look"))
+	rig.pencil.set_left_handed(Settings.get_value("writing/hand") == "left")
 
 
 func _build_speech() -> void:
@@ -120,8 +123,10 @@ func _slide_in_facedown() -> void:
 	_facedown.set_page(null, Session.doc.page_size_pt(0), 72.0)
 	var target := packet.global_transform
 	_facedown.global_transform = target.translated(Vector3(0.0, 0.01, -0.45))
+	_facedown.visible = false
 	var t := create_tween()
 	t.tween_interval(6.0)  # the teacher works their way down the row (Plan 3 animates them)
+	t.tween_callback(func() -> void: _facedown.visible = true)
 	t.tween_property(_facedown, "global_transform", target.translated(Vector3(0, 0.001, 0)), 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
