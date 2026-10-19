@@ -1,0 +1,204 @@
+class_name TestFlow
+extends Node3D
+## The test itself: settling → start bell → test (warnings) → end bell → grace → hand in.
+## Expects Session.begin() (or Session.resume()) to have been called.
+
+const SETTLE_S := 20.0
+const AUTOSAVE_S := 20.0
+const REVIEW_SCENE := "res://scenes/ui/review.tscn"
+const BELL_START := preload("res://assets/audio/placeholder/bell_start.wav")
+const BELL_END := preload("res://assets/audio/placeholder/bell_end.wav")
+
+var room: EnvironmentContract
+var packet: TestPacket
+var rig: PlayerRig
+var paper_dpi: float = 150.0
+
+var _settle_left: float = 0.0
+var _autosave_left: float = AUTOSAVE_S
+var _facedown: PaperPage
+var _speech: Label3D
+var _speech_tween: Tween
+var _bell: AudioStreamPlayer
+var _fade: ColorRect
+var _handing_in: bool = false
+
+
+func _ready() -> void:
+	room = GreyboxClassroom.new()
+	add_child(room)
+	_build_packet()
+	_build_speech()
+	_bell = AudioStreamPlayer.new()
+	_bell.volume_db = -4.0
+	add_child(_bell)
+	var layer := CanvasLayer.new()
+	layer.layer = 50
+	add_child(layer)
+	_fade = ColorRect.new()
+	_fade.color = Color(0.06, 0.05, 0.05, 1.0)
+	_fade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_fade)
+	create_tween().tween_property(_fade, "color:a", 0.0, 1.2)
+
+	Session.timer.warning.connect(_on_warning)
+	Session.timer.test_ended.connect(_on_test_ended)
+	Session.timer.grace_ended.connect(_on_grace_ended)
+	Session.finishing.connect(rig.commit_in_progress)
+	room.wall_clock.visible = Session.options.get("clock", "wall") == "wall"
+	room.board.set_lines(BoardText.format(int(Session.options.start_minute), float(Session.options.duration_s)),
+		"No talking. Raise your hand if you have a question.")
+
+	if Session.machine.state == SessionMachine.State.SETTLING:
+		_settle_left = SETTLE_S
+		Session.pre_roll_s = SETTLE_S
+		packet.visible = false
+		rig.input_enabled = false
+		_slide_in_facedown()
+	else:
+		_settle_left = 0.0  # resumed straight into the test
+
+
+func _exit_tree() -> void:
+	if Session.finishing.is_connected(rig.commit_in_progress):
+		Session.finishing.disconnect(rig.commit_in_progress)
+
+
+func _build_packet() -> void:
+	var seat := room.desk_surface()
+	packet = TestPacket.new()
+	add_child(packet)
+	packet.global_transform = seat * Transform3D(Basis(Vector3.UP, deg_to_rad(2.0)), Vector3.ZERO)
+	packet.setup(Session.doc, Session.attempt, paper_dpi)
+	packet.page_turned.connect(func(_i: int) -> void: Session.autosave())
+	rig = PlayerRig.new()
+	add_child(rig)
+	rig.global_transform = seat
+	rig.setup(packet, Session.attempt, Session.doc)
+	rig.elapsed_provider = func() -> float: return Session.timer.elapsed()
+
+
+func _build_speech() -> void:
+	_speech = Label3D.new()
+	_speech.font = load("res://assets/fonts/AtkinsonHyperlegible-Regular.ttf")
+	_speech.font_size = 64
+	_speech.pixel_size = 0.0016
+	_speech.modulate = Color("#2E2B28")
+	_speech.outline_modulate = Color("#FBFAF6")
+	_speech.outline_size = 28
+	_speech.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_speech.no_depth_test = true
+	_speech.width = 900
+	_speech.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_speech.position = room.teacher_desk.global_position + Vector3(0, 1.95, 0)
+	_speech.modulate.a = 0.0
+	_speech.outline_modulate.a = 0.0
+	add_child(_speech)
+
+
+## Placeholder for Plan 4's speech bubble: the teacher's line fades in, stays, fades out.
+func say(text: String) -> void:
+	_speech.text = text
+	if _speech_tween:
+		_speech_tween.kill()
+	var hold := 2.5 + 0.05 * text.split(" ").size()
+	_speech_tween = create_tween()
+	_speech_tween.tween_method(_set_speech_alpha, 0.0, 1.0, 0.3)
+	_speech_tween.tween_interval(hold)
+	_speech_tween.tween_method(_set_speech_alpha, 1.0, 0.0, 0.5)
+
+
+func _set_speech_alpha(a: float) -> void:
+	_speech.modulate.a = a
+	_speech.outline_modulate.a = a
+
+
+func _slide_in_facedown() -> void:
+	_facedown = PaperPage.new()
+	add_child(_facedown)
+	_facedown.set_page(null, Session.doc.page_size_pt(0), 72.0)
+	var target := packet.global_transform
+	_facedown.global_transform = target.translated(Vector3(0.0, 0.01, -0.45))
+	var t := create_tween()
+	t.tween_interval(6.0)  # the teacher works their way down the row (Plan 3 animates them)
+	t.tween_property(_facedown, "global_transform", target.translated(Vector3(0, 0.001, 0)), 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+
+func _process(delta: float) -> void:
+	room.wall_clock.set_time(Session.seconds_of_day())
+	if _settle_left > 0.0:
+		_settle_left -= delta
+		Session.pre_roll_s = maxf(_settle_left, 0.0)
+		if _settle_left <= 0.0:
+			_start_test()
+		return
+	if Session.machine.state == SessionMachine.State.TESTING or Session.machine.state == SessionMachine.State.GRACE:
+		_autosave_left -= delta
+		if _autosave_left <= 0.0:
+			_autosave_left = AUTOSAVE_S
+			Session.autosave()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _settle_left > 0.0 and event.is_action_pressed("look_up"):
+		_settle_left = 0.01  # Space skips the settling-in
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("hand_in"):
+		hand_in()
+
+
+func _start_test() -> void:
+	_bell.stream = BELL_START
+	_bell.play()
+	say("You may begin.")
+	if _facedown:
+		_facedown.queue_free()
+		_facedown = null
+	packet.visible = true
+	rig.input_enabled = true
+	Session.start_test()
+
+
+func _on_warning(minutes: int) -> void:
+	room.board.set_note(BoardText.warning(minutes))
+	say(BoardText.spoken_warning(minutes))
+
+
+func _on_test_ended() -> void:
+	_bell.stream = BELL_END
+	_bell.play()
+	say("Pencils down, please. Bring your tests up when you're done.")
+	if Session.timer.phase() == ExamTimer.Phase.GRACE:
+		Session.machine.transition_to(SessionMachine.State.GRACE)
+
+
+func _on_grace_ended() -> void:
+	if Session.timer.grace_s > 0.0:
+		say("Time's up, I'll take that.")
+	hand_in()
+
+
+## H during the test or grace period (Plan 1: a fade instead of the walk to the front).
+func hand_in() -> void:
+	var st := Session.machine.state
+	if _handing_in or not (st == SessionMachine.State.TESTING or st == SessionMachine.State.GRACE):
+		return
+	_handing_in = true
+	rig.input_enabled = false
+	Session.machine.transition_to(SessionMachine.State.HANDING_IN)
+	var t := create_tween()
+	t.tween_interval(0.6)
+	t.tween_property(_fade, "color:a", 1.0, 1.0)
+	t.tween_callback(func() -> void:
+		Session.finish()
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		get_tree().change_scene_to_file(REVIEW_SCENE))
+
+
+func dev_action(name: String) -> void:
+	match name:
+		"skip": _settle_left = 0.01
+		"lookup": rig.set_view(PlayerRig.View.LOOK_UP)
+		"handin": hand_in()
+		"warn": _on_warning(15)

@@ -47,6 +47,7 @@ var _erase_before: Dictionary = {}
 var _erase_text_mode: bool = false
 var _undo: Dictionary = {}  # page key -> UndoStack
 var _last_mouse := Vector2.ZERO
+var _mouse_seen: bool = false  # edge-look only arms after the mouse has really moved
 
 
 func _ready() -> void:
@@ -57,6 +58,7 @@ func _ready() -> void:
 	add_child(camera)
 	pencil = PencilModel.new()
 	add_child(pencil)
+	_last_mouse = get_viewport().get_visible_rect().size * Vector2(0.55, 0.6)
 	_place_camera(View.DESK, 1.0)
 
 
@@ -73,7 +75,8 @@ func setup(p: TestPacket, a: Attempt, d: PdfDoc) -> void:
 func _process(delta: float) -> void:
 	_update_mouse_mode()
 	var vp_h := float(get_viewport().get_visible_rect().size.y)
-	var wants_up := _space_held or edge_look.update(_last_mouse.y / maxf(vp_h, 1.0), delta)
+	var edge := _mouse_seen and input_enabled and edge_look.update(_last_mouse.y / maxf(vp_h, 1.0), delta)
+	var wants_up := _space_held or edge
 	if not _space_held and _edge_up and _last_mouse.y / maxf(vp_h, 1.0) > 0.25:
 		wants_up = false  # moving the cursor back down returns to the paper
 	elif not _space_held and _edge_up:
@@ -142,6 +145,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
 		_last_mouse = mm.position
+		_mouse_seen = true
 		if view == View.LOOK_UP:
 			var size := get_viewport().get_visible_rect().size
 			_free_look = Vector2((mm.position.x / size.x - 0.5) * 2.0, (mm.position.y / size.y - 0.5) * 2.0).clamp(Vector2(-1, -1), Vector2(1, 1))
@@ -235,6 +239,21 @@ func _notification(what: int) -> void:
 		if s:
 			_commit_stroke(s)
 		_end_erase()
+
+
+## The test is ending: keep the stroke being drawn and everything typed so far.
+func commit_in_progress() -> void:
+	if handwriting:
+		handwriting.commit_all()
+	if _ink.is_active():
+		var s := _ink.end()
+		if packet:
+			packet.active_page().ink_layer().live_stroke = null
+		if s:
+			_commit_stroke(s)
+	if _fill_tween and _fill_tween.is_running():
+		_fill_tween.custom_step(10.0)
+	_end_erase()
 
 
 ## Alt-tabbing mid-stroke commits what was drawn instead of losing it or leaving it stuck.
