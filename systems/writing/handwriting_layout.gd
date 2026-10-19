@@ -144,3 +144,25 @@ static func line_spacing_near(words: Array, at: Vector2) -> float:
 		gaps.append(ys[i + 1] - ys[i])
 	gaps.sort()
 	return gaps[gaps.size() / 2]
+
+
+const MARGIN_PT := 36.0
+
+
+## Where typed answers wrap: 36 pt from the page's right edge. Screen, export and hit-testing all
+## use this, so a wrapped answer is laid out the same everywhere.
+static func wrap_x(page_size_pt: Vector2) -> float:
+	return page_size_pt.x - MARGIN_PT
+
+
+static func layout_mark(t: TextMark, page_size_pt: Vector2) -> Array[GlyphPlacement]:
+	return layout(t.text, t.origin, t.size_pt, t.font_id, t.seed, wrap_x(page_size_pt))
+
+
+## The typed answer with a glyph near p (for clicking into it to edit), or null.
+static func mark_at(texts: Array, p: Vector2, page_size_pt: Vector2) -> TextMark:
+	for t in texts:
+		for g in layout_mark(t, page_size_pt):
+			if g.ch != " " and g.ch != "\n" and g.center(t.size_pt).distance_to(p) < t.size_pt * 0.7:
+				return t
+	return null

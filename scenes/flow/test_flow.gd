@@ -188,6 +188,7 @@ func open_menu() -> void:
 	var st := Session.machine.state
 	if not (st == SessionMachine.State.TESTING or st == SessionMachine.State.GRACE):
 		return
+	rig.settle_input()
 	Session.timer.pause()
 	rig.input_enabled = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

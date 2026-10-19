@@ -3,6 +3,8 @@ extends Control
 ## After handing in: your marked pages, a few stats, Save PDF, and the AI marking prompt (spec §4.4).
 
 const VIEW_DPI := 110.0
+const THUMB_DPI := 24.0
+const FULL_CACHE := 3  # full-resolution pages kept in memory
 const MAIN_SCENE := "res://scenes/main.tscn"
 const TEST_SCENE := "res://scenes/flow/test_scene.tscn"
 
@@ -11,9 +13,12 @@ static var pending_attempt_path: String = ""
 
 var attempt: Attempt
 var doc: PdfDoc
+var _missing_reason: String = ""
+var _missing_label: Label
 var _page := 0
 var _zoom := 0  # 0 = fit width, 1 = 100%, 2 = 200%
-var _cache: Dictionary = {}
+var _cache: Dictionary = {}  # page -> Image at VIEW_DPI (most recent FULL_CACHE pages)
+var _cache_order: Array[int] = []
 var _view: TextureRect
 var _scroll: ScrollContainer
 var _strip: VBoxContainer
@@ -45,6 +50,9 @@ func _load_attempt() -> void:
 		pending_attempt_path = ""
 		if attempt:
 			doc = PdfService.open(attempt.pdf_path)
+			if doc and not Session.pdf_matches(attempt, doc):
+				doc = null
+				_missing_reason = "The PDF at %s isn't the one this test was taken on." % attempt.pdf_path
 	else:
 		attempt = Session.attempt
 		doc = Session.doc
@@ -61,7 +69,8 @@ func _build_missing() -> void:
 	v.add_theme_constant_override("separation", 10)
 	card.add_child(v)
 	var l := Label.new()
-	l.text = "Can't find the original PDF at %s." % (attempt.pdf_path if attempt else "?")
+	_missing_label = l
+	l.text = _missing_reason if _missing_reason != "" else "Can't find the original PDF at %s." % (attempt.pdf_path if attempt else "?")
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size.x = 460
 	v.add_child(l)
@@ -86,6 +95,10 @@ func _build_missing() -> void:
 
 ## The original PDF moved: point the attempt at its new location and reopen.
 func _relocate(path: String) -> void:
+	var d := PdfService.open(path)
+	if d == null or not Session.pdf_matches(attempt, d):
+		_missing_label.text = "That isn't the PDF this test was taken on. Choose the original file."
+		return
 	attempt.pdf_path = path
 	var archived := Session.store.archive(attempt)
 	pending_attempt_path = archived
@@ -237,26 +250,37 @@ func _mini(text: String) -> Label:
 	return l
 
 
-## The page as rendered at VIEW_DPI with the pencil marks and handwriting on top.
+## The page as rendered at VIEW_DPI with the pencil marks and handwriting on top. Only the most
+## recently viewed FULL_CACHE pages stay in memory.
 func page_image(i: int) -> Image:
 	if not _cache.has(i):
-		var img := doc.render_page(i, VIEW_DPI)
-		var size := doc.page_size_pt(i)
-		var ink := attempt.pages[i]
-		var overlay := InkRasterizer.rasterize(ink, size, VIEW_DPI)
-		for t in ink.texts:
-			InkRasterizer.rasterize_text(overlay, HandwritingLayout.layout(t.text, t.origin, t.size_pt, t.font_id, t.seed, size.x - 36.0), t.size_pt, VIEW_DPI, Color(InkRasterizer.GRAPHITE, 1.0))
-		if overlay.get_size() != img.get_size():
-			overlay.resize(img.get_width(), img.get_height())
-		img.blend_rect(overlay, Rect2i(Vector2i.ZERO, overlay.get_size()), Vector2i.ZERO)
-		_cache[i] = img
+		_cache[i] = _composite(i, VIEW_DPI)
+	_cache_order.erase(i)
+	_cache_order.append(i)
+	while _cache_order.size() > FULL_CACHE:
+		_cache.erase(_cache_order.pop_front())
 	return _cache[i]
 
 
-func _thumb(i: int) -> Image:
-	var img: Image = page_image(i).duplicate()
-	img.resize(80, int(80.0 * img.get_height() / img.get_width()), Image.INTERPOLATE_LANCZOS)
+func full_pages_cached() -> int:
+	return _cache.size()
+
+
+func _composite(i: int, dpi: float) -> Image:
+	var img := doc.render_page(i, dpi)
+	var size := doc.page_size_pt(i)
+	var ink := attempt.pages[i]
+	var overlay := InkRasterizer.rasterize(ink, size, dpi)
+	for t in ink.texts:
+		InkRasterizer.rasterize_text(overlay, HandwritingLayout.layout_mark(t, size), t.size_pt, dpi, Color(InkRasterizer.GRAPHITE, 1.0))
+	if overlay.get_size() != img.get_size():
+		overlay.resize(img.get_width(), img.get_height())
+	img.blend_rect(overlay, Rect2i(Vector2i.ZERO, overlay.get_size()), Vector2i.ZERO)
 	return img
+
+
+func _thumb(i: int) -> Image:
+	return _composite(i, THUMB_DPI)
 
 
 func _show_page(i: int) -> void:

@@ -45,3 +45,21 @@ func test_poll_reports_textures_collected_elsewhere() -> void:
 	assert_gt(c.texture_for(5, 5).get_width(), 200, "full-res page arrived")
 	assert_true(c.poll(), "poll must still report the new texture so the packet refreshes")
 	assert_false(c.poll(), "and only once")
+
+func test_shutdown_waits_for_background_renders() -> void:
+	var c := PageCache.new(doc, 150.0, 24.0)  # async
+	c.texture_for(30, 30)
+	c.shutdown()
+	assert_eq(c.pending_count(), 0)
+
+func test_main_thread_pdf_calls_while_worker_renders() -> void:
+	# Regression guard for PDFium not being thread-safe: Quick Fill / typing call the document
+	# from the main thread while neighbour pages render on workers.
+	var c := PageCache.new(doc, 200.0, 24.0)
+	for round in 6:
+		c.texture_for(10 + round * 10, 10 + round * 10)
+		for i in 4:
+			doc.text_words(i)
+			doc.render_page(i, 30.0)
+	c.shutdown()
+	assert_eq(c.pending_count(), 0)

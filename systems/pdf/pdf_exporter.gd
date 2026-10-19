@@ -10,6 +10,13 @@ const TEXT_COLOR := Color(0.231, 0.227, 0.235, 1.0)
 
 ## Returns {"ok": bool, "mode": "vector"|"images", "error": String}.
 static func export(doc: PdfDoc, attempt: Attempt, out_path: String) -> Dictionary:
+	PdfDoc.lock()  # PDFium is not thread-safe; page renders may be running on workers
+	var r := _export_locked(doc, attempt, out_path)
+	PdfDoc.unlock()
+	return r
+
+
+static func _export_locked(doc: PdfDoc, attempt: Attempt, out_path: String) -> Dictionary:
 	if _same_file(out_path, doc.path):
 		return {"ok": false, "mode": "vector", "error": "same_as_source"}
 	# Work on a fresh copy: the in-game document must never change.
@@ -59,7 +66,7 @@ static func export_images(doc: PdfDoc, attempt: Attempt, out_path: String) -> Di
 static func _flatten(page_img: Image, ink: PageInk, size: Vector2) -> Image:
 	var overlay := InkRasterizer.rasterize(ink, size, IMAGE_DPI)
 	for t in ink.texts:
-		InkRasterizer.rasterize_text(overlay, HandwritingLayout.layout(t.text, t.origin, t.size_pt, t.font_id, t.seed, 100000.0), t.size_pt, IMAGE_DPI, TEXT_COLOR)
+		InkRasterizer.rasterize_text(overlay, HandwritingLayout.layout_mark(t, size), t.size_pt, IMAGE_DPI, TEXT_COLOR)
 	var out := page_img.duplicate()
 	out.convert(Image.FORMAT_RGBA8)
 	if overlay.get_size() != out.get_size():
@@ -69,13 +76,18 @@ static func _flatten(page_img: Image, ink: PageInk, size: Vector2) -> Image:
 
 
 static func _draw_ink(page: PDFPage, ink: PageInk) -> void:
+	var rot := page.get_rotation()
+	var size := page.get_page_size()
 	for s in ink.strokes:
 		if s.tool != Stroke.Tool.PENCIL or s.points.is_empty():
 			continue
 		var pts := InkGeometry.smooth(s.points) if s.points.size() > 2 else s.points
 		if pts.size() == 1:
 			pts = PackedVector2Array([pts[0], pts[0] + Vector2(0.01, 0)])
-		page.add_path(pts, Color(0, 0, 0, 0), GRAPHITE, _mean_width(s), false)
+		var mapped := PackedVector2Array()
+		for p in pts:
+			mapped.append(to_page_space(p, rot, size))
+		page.add_path(mapped, Color(0, 0, 0, 0), GRAPHITE, _mean_width(s), false)
 	for t in ink.texts:
 		_draw_text_mark(page, t)
 
@@ -89,7 +101,7 @@ const HIDDEN := Color(0, 0, 0, 0)
 ## marker can read them exactly.
 static func _draw_text_mark(page: PDFPage, t: TextMark) -> void:
 	var size := page.get_page_size()
-	var glyphs := HandwritingLayout.layout(t.text, t.origin, t.size_pt, t.font_id, t.seed, size.x - 36.0)
+	var glyphs := HandwritingLayout.layout_mark(t, size)  # get_page_size() is the rotated (display) size
 	if glyphs.is_empty():
 		return
 	var bounds := Rect2(glyphs[0].pos, Vector2.ZERO)
@@ -112,7 +124,13 @@ static func _draw_text_mark(page: PDFPage, t: TextMark) -> void:
 		shifted.append(c)
 	InkRasterizer.rasterize_text(img, shifted, t.size_pt, TEXT_DPI, TEXT_COLOR)
 	InkRasterizer.embolden(img)
-	page.add_image(img, bounds, false, 1.0)
+	var rot := page.get_rotation()
+	# The page turns its content for display, so turn the image the other way first.
+	match rot:
+		1: img.rotate_90(COUNTERCLOCKWISE)
+		2: img.rotate_180()
+		3: img.rotate_90(CLOCKWISE)
+	page.add_image(img, rect_to_page_space(bounds, rot, size), false, 1.0)
 	# Invisible, extractable text, one call per line.
 	var line := -1
 	var text := ""
@@ -120,14 +138,61 @@ static func _draw_text_mark(page: PDFPage, t: TextMark) -> void:
 	for g in glyphs:
 		if g.line != line:
 			if text.strip_edges() != "":
-				page.add_text(text, origin, "Helvetica", t.size_pt * 0.75, HIDDEN, PDFPage.ALIGN_LEFT, false, false)
+				page.add_text(plain_text(text), to_page_space(origin, rot, size), "Helvetica", t.size_pt * 0.75, HIDDEN, PDFPage.ALIGN_LEFT, false, false)
 			line = g.line
 			text = ""
 			origin = g.pos
 		if g.ch != "\n":
 			text += g.ch
 	if text.strip_edges() != "":
-		page.add_text(text, origin, "Helvetica", t.size_pt * 0.75, HIDDEN, PDFPage.ALIGN_LEFT, false, false)
+		page.add_text(plain_text(text), to_page_space(origin, rot, size), "Helvetica", t.size_pt * 0.75, HIDDEN, PDFPage.ALIGN_LEFT, false, false)
+
+
+## Display point (what the player saw: top-left origin, rotation applied) → the coordinates
+## PDFium-GDE's add_* calls expect on a page with /Rotate. Measured: the extension flips y with the
+## rotated page height, then the page's rotation is applied on display.
+## Standard PDF fonts only cover Latin-1, so the invisible text layer spells out math and Greek
+## symbols an AI marker must not lose. Anything else unmapped becomes [U+XXXX].
+const SPELLED := {
+	"√": "sqrt", "≤": "<=", "≥": ">=", "≠": "!=", "≈": "~=", "∞": "infinity", "→": "->", "←": "<-",
+	"∫": "integral", "∑": "sum", "∏": "product", "∂": "d", "∆": "Delta", "−": "-", "·": "*", "…": "...",
+	"π": "pi", "θ": "theta", "α": "alpha", "β": "beta", "γ": "gamma", "δ": "delta", "Δ": "Delta",
+	"ε": "epsilon", "λ": "lambda", "μ": "mu", "σ": "sigma", "Σ": "Sigma", "φ": "phi", "ω": "omega",
+	"Ω": "Omega", "ρ": "rho", "τ": "tau", "⁰": "^0", "⁴": "^4", "⁵": "^5", "⁶": "^6", "⁷": "^7",
+	"⁸": "^8", "⁹": "^9", "ⁿ": "^n", "₀": "_0", "₁": "_1", "₂": "_2", "₃": "_3", "“": "\"", "”": "\"",
+	"‘": "'", "’": "'", "–": "-", "—": "-",
+}
+
+
+static func plain_text(s: String) -> String:
+	var out := ""
+	for ch in s.split(""):
+		var code := ch.unicode_at(0)
+		if code < 256:
+			out += ch
+		elif SPELLED.has(ch):
+			out += SPELLED[ch]
+		else:
+			out += "[U+%04X]" % code
+	return out
+
+
+static func to_page_space(p: Vector2, rot: int, rotated_size: Vector2) -> Vector2:
+	var w := rotated_size.y if rot % 2 == 1 else rotated_size.x  # unrotated width
+	var h := rotated_size.x if rot % 2 == 1 else rotated_size.y  # unrotated height
+	match rot:
+		1: return Vector2(p.y, rotated_size.y - p.x)
+		2: return Vector2(w - p.x, rotated_size.y - p.y)
+		3: return Vector2(w - p.y, rotated_size.y - h + p.x)
+	return p
+
+
+static func rect_to_page_space(r: Rect2, rot: int, rotated_size: Vector2) -> Rect2:
+	var a := to_page_space(r.position, rot, rotated_size)
+	var out := Rect2(a, Vector2.ZERO)
+	for c in [Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]:
+		out = out.expand(to_page_space(c, rot, rotated_size))
+	return out
 
 
 static func _mean_width(s: Stroke) -> float:

@@ -22,6 +22,7 @@ var store := AttemptStore.new()
 var doc: PdfDoc
 var options: Dictionary = {}
 var last_archive_path: String = ""
+var last_resume_error: String = ""  ## "missing" or "changed" when resume() refuses
 var pre_roll_s: float = 0.0  ## seconds until the start bell while settling (wall clock reads earlier)
 
 
@@ -47,8 +48,13 @@ func _make_timer(o: Dictionary) -> ExamTimer:
 ## Restores an autosaved attempt straight into the test (no settling, no start bell).
 ## Returns false when the original PDF can't be opened.
 func resume(a: Attempt) -> bool:
+	last_resume_error = ""
 	var d := PdfService.open(a.pdf_path)
 	if d == null:
+		last_resume_error = "missing"
+		return false
+	if not pdf_matches(a, d):
+		last_resume_error = "changed"
 		return false
 	machine.abort()
 	doc = d
@@ -63,6 +69,14 @@ func resume(a: Attempt) -> bool:
 	if timer.phase() == ExamTimer.Phase.GRACE:
 		machine.transition_to(SessionMachine.State.GRACE)
 	return true
+
+
+## Is this the same PDF the attempt was taken on? (Same file hash, or at least same page count for
+## attempts saved without a hash.)
+func pdf_matches(a: Attempt, d: PdfDoc) -> bool:
+	if a.pdf_sha1 != "":
+		return a.pdf_sha1 == d.sha1
+	return a.pages.size() == d.page_count()
 
 
 func start_test() -> void:
@@ -84,6 +98,17 @@ func seconds_of_day() -> float:
 	if timer.phase() == ExamTimer.Phase.GRACE or timer.phase() == ExamTimer.Phase.OVER:
 		s += timer.grace_elapsed()
 	return s
+
+
+## Starting a new test while one is in progress: keep the unfinished one in History rather than
+## overwriting it.
+func shelve_autosave() -> void:
+	var a := store.load_autosave()
+	if a == null:
+		return
+	a.finished = false
+	store.archive(a)
+	store.clear_autosave()
 
 
 func autosave() -> void:

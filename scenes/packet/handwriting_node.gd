@@ -57,12 +57,7 @@ func _size_for(at_pt: Vector2) -> float:
 
 
 func _mark_at(page: PageInk, p: Vector2) -> TextMark:
-	for t in page.texts:
-		var glyphs := HandwritingLayout.layout(t.text, t.origin, t.size_pt, t.font_id, t.seed, 100000.0)
-		for g in glyphs:
-			if g.center(t.size_pt).distance_to(p) < t.size_pt * 0.7:
-				return t
-	return null
+	return HandwritingLayout.mark_at(page.texts, p, rig.packet.active_page().size_pt)
 
 
 func _process(delta: float) -> void:
@@ -78,7 +73,7 @@ func _process(delta: float) -> void:
 ## Where the pencil should be: on the last glyph written so far.
 func _writing_point() -> Vector2:
 	var m := entry.mark
-	var glyphs := HandwritingLayout.layout(m.text, m.origin, m.size_pt, m.font_id, m.seed, _layer._max_x(m))
+	var glyphs := HandwritingLayout.layout_mark(m, rig.packet.active_page().size_pt)
 	var n := int(_revealed)
 	if n <= 0 or glyphs.is_empty():
 		return m.origin

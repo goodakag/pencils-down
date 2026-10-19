@@ -42,6 +42,11 @@ static func width_for_speed(speed_pt_s: float, base_w_pt: float = 0.9, pressure:
 
 ## Removes points within radius and returns the remaining runs of 2+ points (ids = -1).
 static func erase(stroke: Stroke, center: Vector2, radius: float) -> Array[Stroke]:
+	if not hits(stroke, center, radius):
+		var same: Array[Stroke] = []
+		_flush(same, stroke.points, stroke.widths, stroke)
+		return same
+	stroke = _resampled(stroke, radius * 0.5)
 	var out: Array[Stroke] = []
 	var run_pts := PackedVector2Array()
 	var run_w := PackedFloat32Array()
@@ -56,6 +61,28 @@ static func erase(stroke: Stroke, center: Vector2, radius: float) -> Array[Strok
 			run_w.append(stroke.widths[i] if i < stroke.widths.size() else 1.0)
 	_flush(out, run_pts, run_w, stroke)
 	return out
+
+
+## Inserts points so no segment is longer than max_step (fast strokes are sampled sparsely).
+static func _resampled(stroke: Stroke, max_step: float) -> Stroke:
+	var s := Stroke.new()
+	s.tool = stroke.tool
+	s.t_start = stroke.t_start
+	var n := stroke.points.size()
+	for i in n:
+		var w := stroke.widths[i] if i < stroke.widths.size() else 1.0
+		if i > 0:
+			var a := stroke.points[i - 1]
+			var b := stroke.points[i]
+			var wa := stroke.widths[i - 1] if i - 1 < stroke.widths.size() else 1.0
+			var steps := int(ceil(a.distance_to(b) / maxf(max_step, 0.01)))
+			for k in range(1, steps):
+				var t := float(k) / steps
+				s.points.append(a.lerp(b, t))
+				s.widths.append(lerpf(wa, w, t))
+		s.points.append(stroke.points[i])
+		s.widths.append(w)
+	return s
 
 
 static func _flush(out: Array[Stroke], pts: PackedVector2Array, w: PackedFloat32Array, src: Stroke) -> void:

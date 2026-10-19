@@ -128,3 +128,61 @@ func test_typed_answers_keep_file_small() -> void:
 	var added := FileAccess.get_file_as_bytes(_out("small.pdf")).size() - base
 	gut.p("5 typed answers added %d bytes" % added)
 	assert_lt(added, 400_000)
+
+func test_marks_land_correctly_on_rotated_pages() -> void:
+	var doc := _doc("rotated.pdf")
+	var a := Attempt.create(doc, {"scratch_sheets": 0})
+	for p in a.pages:
+		p.strokes.append(_line(Vector2(100, 100), Vector2(160, 100), 4.0))
+	var r := PdfExporter.export(doc, a, _out("rot.pdf"))
+	assert_true(r.ok, str(r))
+	var out := PdfDoc.open(_out("rot.pdf"))
+	for i in out.page_count():
+		var img := out.render_page(i, 72.0)
+		assert_lt(_lum(img, 130, 100), 0.5, "page %d: mark at (130,100) as drawn" % i)
+		assert_gt(_lum(img, 100, 130), 0.85, "page %d: not rotated into a vertical line" % i)
+
+func test_typed_text_lands_on_rotated_page() -> void:
+	var doc := _doc("rotated.pdf")
+	var a := Attempt.create(doc, {"scratch_sheets": 0})
+	for p in a.pages:
+		var t := TextMark.new()
+		t.origin = Vector2(400, 300)
+		t.size_pt = 20.0
+		t.text = "HHHH"
+		p.texts.append(t)
+	PdfExporter.export(doc, a, _out("rot_text.pdf"))
+	var out := PdfDoc.open(_out("rot_text.pdf"))
+	for i in out.page_count():
+		var img := out.render_page(i, 72.0)
+		var dark := 0
+		for y in range(284, 300):
+			for x in range(402, 450):
+				if _lum(img, x, y) < 0.5:
+					dark += 1
+		assert_gt(dark, 20, "page %d: handwriting drawn where it was typed" % i)
+
+func test_math_symbols_survive_in_text_layer() -> void:
+	var doc := _doc("mc_letter.pdf")
+	var a := Attempt.create(doc, {"scratch_sheets": 0})
+	var t := TextMark.new()
+	t.origin = Vector2(72, 700)
+	t.size_pt = 16.0
+	t.text = "x² + √2 ≤ π θ café"
+	a.pages[0].texts.append(t)
+	PdfExporter.export(doc, a, _out("math.pdf"))
+	var found := ""
+	for w in PdfDoc.open(_out("math.pdf")).text_words(0):
+		if (w.rect as Rect2).position.y > 650:
+			found += String(w.text) + " "
+	assert_string_contains(found, "sqrt")
+	assert_string_contains(found, "<=")
+	assert_string_contains(found, "pi")
+	assert_string_contains(found, "theta")
+	assert_string_contains(found, "café")
+	assert_false(found.contains("ÿ"), "no garbled characters: " + found)
+
+func test_plain_text_for_ai_transliterates() -> void:
+	assert_eq(PdfExporter.plain_text("√2 ≤ π"), "sqrt2 <= pi")
+	assert_eq(PdfExporter.plain_text("x² café"), "x² café")
+	assert_eq(PdfExporter.plain_text("∑ ♞"), "sum [U+265E]")

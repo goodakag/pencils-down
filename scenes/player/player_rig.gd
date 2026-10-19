@@ -45,6 +45,7 @@ var _ink := InkInput.new()
 var _erasing: bool = false
 var _erase_before: Dictionary = {}
 var _erase_text_mode: bool = false
+var _erase_key: String = ""
 var _undo: Dictionary = {}  # page key -> UndoStack
 var _last_mouse := Vector2.ZERO
 var _mouse_seen: bool = false  # edge-look only arms after the mouse has really moved
@@ -155,11 +156,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_on_mouse_button(event as InputEventMouseButton)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		_on_key(event as InputEventKey)
-	if event.is_action("look_up"):
+	if event.is_action("look_up") and not event.is_echo():
 		_space_held = event.is_pressed()
 		if _space_held:
 			_cancel_stroke()
-	if event.is_action("overview"):
+	if event.is_action("overview") and not event.is_echo():
+		if event.is_pressed():
+			settle_input()
 		packet.set_overview(event.is_pressed())
 
 
@@ -176,14 +179,11 @@ func _on_key(k: InputEventKey) -> void:
 	elif k.ctrl_pressed and k.physical_keycode == KEY_Y:
 		redo()
 	elif k.is_action("turn_next"):
-		_cancel_stroke()
-		packet.turn(1)
+		turn_page(1)
 	elif k.is_action("turn_prev"):
-		_cancel_stroke()
-		packet.turn(-1)
+		turn_page(-1)
 	elif k.is_action("scratch"):
-		_cancel_stroke()
-		packet.toggle_scratch()
+		toggle_scratch()
 
 
 func _on_mouse_button(b: InputEventMouseButton) -> void:
@@ -205,6 +205,7 @@ func _on_mouse_button(b: InputEventMouseButton) -> void:
 		if hit != null:
 			var i := packet.overview_index_at(hit)
 			if i >= 0:
+				settle_input()
 				packet.set_overview(false)
 				packet.jump(i)
 		return
@@ -234,11 +235,33 @@ func _on_mouse_button(b: InputEventMouseButton) -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
-		var s := on_focus_lost(_ink)
-		if s:
-			_commit_stroke(s)
-		_end_erase()
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and packet:
+		settle_input()
+
+
+## The context is changing (page turn, scratch paper, menu, focus loss): finish whatever the hand
+## is doing on the current sheet, so nothing lands on the wrong page or stays stuck down.
+func settle_input() -> void:
+	var s := on_focus_lost(_ink)
+	if s:
+		packet.active_page().ink_layer().live_stroke = null
+		_commit_stroke(s)
+	if _fill_tween and _fill_tween.is_running():
+		_fill_tween.custom_step(10.0)
+	_end_erase()
+	_space_held = false
+	_edge_up = false
+	edge_look.reset()
+
+
+func turn_page(dir: int) -> void:
+	settle_input()
+	packet.turn(dir)
+
+
+func toggle_scratch() -> void:
+	settle_input()
+	packet.toggle_scratch()
 
 
 ## The test is ending: keep the stroke being drawn and everything typed so far.
@@ -297,8 +320,9 @@ func _cancel_stroke() -> void:
 		_end_stroke()
 
 
-func _commit_stroke(s: Stroke) -> void:
-	var key := _ink.page_key if _ink.page_key != "" else packet.state.active_key()
+func _commit_stroke(s: Stroke, key: String = "") -> void:
+	if key == "":
+		key = _ink.page_key if _ink.page_key != "" else packet.state.active_key()
 	var page := attempt.ink_for(key)
 	s.id = page.next_id()
 	s.t_start = elapsed_provider.call()
@@ -311,8 +335,7 @@ func _commit_stroke(s: Stroke) -> void:
 
 ## Commits a stroke made elsewhere (Quick Fill) through the same undo path.
 func commit_external_stroke(key: String, s: Stroke) -> void:
-	_ink.page_key = key
-	_commit_stroke(s)
+	_commit_stroke(s, key)
 
 
 # --- Quick Fill ----------------------------------------------------------------------------------
@@ -383,7 +406,8 @@ func _begin_erase(text_mode: bool) -> void:
 	_cancel_stroke()
 	_erasing = true
 	_erase_text_mode = text_mode
-	_erase_before = attempt.ink_for(packet.state.active_key()).to_dict()
+	_erase_key = packet.state.active_key()
+	_erase_before = attempt.ink_for(_erase_key).to_dict()
 	pencil.set_eraser(true)
 
 
@@ -413,7 +437,7 @@ func _erase_at(pos: Vector2) -> void:
 func _erase_glyphs(page: PageInk, p: Vector2) -> bool:
 	var changed := false
 	for t in page.texts:
-		var glyphs := HandwritingLayout.layout(t.text, t.origin, t.size_pt, t.font_id, t.seed, 100000.0)
+		var glyphs := HandwritingLayout.layout_mark(t, packet.active_page().size_pt)
 		var centers := PackedVector2Array()
 		for g in glyphs:
 			centers.append(g.center(t.size_pt))
@@ -434,7 +458,7 @@ func _end_erase() -> void:
 		return
 	_erasing = false
 	pencil.set_eraser(false)
-	var key := packet.state.active_key()
+	var key := _erase_key
 	var after := attempt.ink_for(key).to_dict()
 	if JSON.stringify(after) != JSON.stringify(_erase_before):
 		attempt.erase_count += 1

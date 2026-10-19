@@ -12,7 +12,7 @@ var _full: Dictionary = {}     # index -> ImageTexture
 var _pending: Dictionary = {}  # index -> WorkerThreadPool task id
 var _thumbs: Dictionary = {}   # index -> ImageTexture
 var _window := Vector2i(0, -1)
-var _mutex := Mutex.new()      # PDFium calls are serialized
+var _mutex := Mutex.new()      # guards _ready_images (PdfDoc serializes PDFium itself)
 var _ready_images: Dictionary = {}  # index -> Image rendered by a worker
 var _arrived: bool = false  # a full-res texture arrived since the last poll()
 
@@ -93,10 +93,21 @@ func _thumb(i: int) -> Texture2D:
 
 
 func _render(i: int, dpi: float) -> Image:
+	return _doc.render_page(i, dpi)
+
+
+## Waits for every background render. Call before the cache's owner goes away.
+func shutdown() -> void:
+	for i in _pending.keys():
+		WorkerThreadPool.wait_for_task_completion(_pending[i])
+	_pending.clear()
 	_mutex.lock()
-	var img := _doc.render_page(i, dpi)
+	_ready_images.clear()
 	_mutex.unlock()
-	return img
+
+
+func pending_count() -> int:
+	return _pending.size()
 
 
 ## Call every frame: picks up finished background renders. Returns true once after new full-res

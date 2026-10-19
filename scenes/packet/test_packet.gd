@@ -81,6 +81,11 @@ func _build() -> void:
 	add_child(_overview_root)
 
 
+func _exit_tree() -> void:
+	if cache:
+		cache.shutdown()
+
+
 func _process(_delta: float) -> void:
 	if cache and cache.poll():
 		_refresh_textures()

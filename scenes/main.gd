@@ -90,11 +90,16 @@ func resume() -> void:
 		get_tree().change_scene_to_file(TEST_SCENE)
 		return
 	var m := _card as MainMenuCard
-	if m:
+	if m == null:
+		return
+	if Session.last_resume_error == "changed":
+		m.show_notice("The PDF at %s has changed since this test was started, so it can't be resumed." % a.pdf_path)
+	else:
 		m.show_notice("Can't find the original PDF for the test in progress%s." % ((" at " + a.pdf_path) if a else ""))
 
 
 func start_test(doc: PdfDoc, options: Dictionary) -> void:
+	Session.shelve_autosave()
 	Session.machine.abort()
 	Session.machine.transition_to(SessionMachine.State.PRETEST)
 	Session.begin(doc, options)

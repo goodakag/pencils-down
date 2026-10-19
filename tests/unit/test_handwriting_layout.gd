@@ -73,3 +73,21 @@ func test_line_spacing_near_uses_median_gap() -> void:
 
 func test_line_spacing_unknown_is_zero() -> void:
 	assert_eq(HandwritingLayout.line_spacing_near([_w(100)], Vector2(80, 100)), 0.0)
+
+func test_wrap_x_is_page_width_minus_margin() -> void:
+	assert_eq(HandwritingLayout.wrap_x(Vector2(612, 792)), 576.0)
+
+func test_mark_at_finds_second_line_of_wrapped_answer() -> void:
+	var t := TextMark.new()
+	t.origin = Vector2(400, 100)
+	t.size_pt = 16.0
+	t.text = "the quick brown fox jumps over the lazy dog"
+	var glyphs := HandwritingLayout.layout_mark(t, Vector2(612, 792))
+	var second: GlyphPlacement = null
+	for g in glyphs:
+		if g.line == 1 and g.ch != " ":
+			second = g
+			break
+	assert_not_null(second, "answer wraps at the page margin")
+	assert_eq(HandwritingLayout.mark_at([t], second.center(t.size_pt), Vector2(612, 792)), t)
+	assert_null(HandwritingLayout.mark_at([t], Vector2(50, 500), Vector2(612, 792)))

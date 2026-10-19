@@ -99,6 +99,17 @@ def make_encrypted(src: Path, path: Path) -> None:
         w.write(f)
 
 
+def make_rotated(src: Path, path: Path) -> None:
+    """Pages carrying /Rotate 90, 270 and 180 (common on scanned exams)."""
+    w = PdfWriter()
+    for i, angle in ((0, 90), (1, 270), (0, 180)):
+        page = PdfReader(str(src)).pages[i]
+        page.rotate(angle)
+        w.add_page(page)
+    with open(path, "wb") as f:
+        w.write(f)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     mc = OUT / "mc_letter.pdf"
@@ -107,6 +118,7 @@ def main() -> None:
     (OUT / "scanned.json").write_text(json.dumps(make_scanned(OUT / "scanned.pdf"), indent=1))
     make_big(OUT / "big_120.pdf")
     make_encrypted(mc, OUT / "encrypted.pdf")
+    make_rotated(mc, OUT / "rotated.pdf")
     (OUT / "corrupt.pdf").write_bytes(mc.read_bytes()[:1000])
     uni = OUT / "unicode" / "Zoë Документы"
     uni.mkdir(parents=True, exist_ok=True)

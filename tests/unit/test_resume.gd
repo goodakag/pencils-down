@@ -63,3 +63,28 @@ func test_resumed_strict_stays_strict() -> void:
 	var a := _saved(10.0, 3600.0, 90.0, "strict")
 	Session.resume(a)
 	assert_false(Session.timer.pausable)
+
+func test_resume_refuses_a_changed_pdf() -> void:
+	var a := _saved(10.0)
+	var other := ProjectSettings.globalize_path(Session.store.root.path_join("swapped.pdf"))
+	DirAccess.make_dir_recursive_absolute(other.get_base_dir())
+	DirAccess.copy_absolute(ProjectSettings.globalize_path("res://tests/fixtures/big_120.pdf"), other)
+	a.pdf_path = other
+	assert_false(Session.resume(a))
+	assert_eq(Session.last_resume_error, "changed")
+	assert_eq(Session.machine.state, SessionMachine.State.MENU)
+
+func test_pdf_matches_helper() -> void:
+	var a := _saved(10.0)
+	assert_true(Session.pdf_matches(a, doc))
+	assert_false(Session.pdf_matches(a, PdfDoc.open(ProjectSettings.globalize_path("res://tests/fixtures/big_120.pdf"))))
+
+func test_new_test_shelves_unfinished_autosave_into_history() -> void:
+	_saved(42.0)
+	assert_not_null(Session.store.load_autosave())
+	Session.shelve_autosave()
+	assert_null(Session.store.load_autosave())
+	var h := Session.store.list_history()
+	assert_eq(h.size(), 1)
+	assert_false(h[0].finished)
+	assert_almost_eq(float(h[0].used_s), 42.0, 0.01)

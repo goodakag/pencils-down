@@ -20,7 +20,7 @@ func load_attempt(path: String) -> Attempt:
 	return Attempt.from_dict(data) if data is Dictionary else null
 
 
-## Newest first: [{path, id, test_title, created_unix, used_s}].
+## Newest first: [{path, id, test_title, created_unix, used_s, finished}].
 func list_history() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var dir := root.path_join("attempts")
@@ -40,6 +40,7 @@ func list_history() -> Array[Dictionary]:
 			"test_title": a.test_title,
 			"created_unix": a.created_unix,
 			"used_s": float(a.timer_state.get("elapsed", 0.0)),
+			"finished": a.finished,
 		})
 	out.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return x.created_unix > y.created_unix)
 	return out

@@ -41,7 +41,7 @@ func _ready() -> void:
 	for it in items:
 		var b := Button.new()
 		var date := MarkingPrompt.local_date_time(int(it.created_unix))
-		b.text = "%s    ·    %s    ·    %s used" % [it.test_title, date, MarkingPrompt.mmss(float(it.used_s))]
+		b.text = "%s    ·    %s    ·    %s used%s" % [it.test_title, date, MarkingPrompt.mmss(float(it.used_s)), "" if it.get("finished", true) else "  (unfinished)"]
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(open_attempt.emit.bind(it.path))

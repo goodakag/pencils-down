@@ -80,9 +80,9 @@ func _draw_text(t: TextMark, revealed: int, caret: bool) -> void:
 		draw_circle((last_end + Vector2(t.size_pt * 0.15, -t.size_pt * 0.12)) * scale_px, 0.9 * scale_px, Color.WHITE)
 
 
-## Right margin for wrapping: 36 pt from the page edge.
+## Right margin for wrapping (shared with export and hit-testing).
 func _max_x(_t: TextMark) -> float:
 	var vp := get_viewport() as SubViewport
 	if vp == null:
 		return 100000.0
-	return vp.size.x / scale_px - 36.0
+	return HandwritingLayout.wrap_x(Vector2(vp.size) / scale_px)
