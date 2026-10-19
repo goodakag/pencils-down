@@ -18,12 +18,21 @@ const ROT_JITTER_DEG := 0.6
 const SCALE_JITTER := 0.04
 const BASELINE_JITTER_PT := 0.3
 const MEASURE_PX := 64
+const PENCIL_EMBOLDEN := 0.8  # handwriting fonts are drawn thin; pencil lines are a bit heavier
 
 static var _cache: Dictionary = {}
 
 
-static func font_for(id: StringName) -> FontFile:
-	return _load(FONTS.get(id, FONTS[&"caveat"]))
+## The handwriting font, slightly emboldened to read like pencil.
+static func font_for(id: StringName) -> Font:
+	var path: String = FONTS.get(id, FONTS[&"caveat"])
+	var key := path + "#pencil"
+	if not _cache.has(key):
+		var v := FontVariation.new()
+		v.base_font = _load(path)
+		v.variation_embolden = PENCIL_EMBOLDEN
+		_cache[key] = v
+	return _cache[key]
 
 
 static func fallback_fonts() -> Array[FontFile]:
@@ -40,7 +49,7 @@ static func _load(path: String) -> FontFile:
 
 
 ## First font that has the character: the chosen handwriting font, then the fallbacks.
-static func font_with(ch: String, primary: FontFile) -> FontFile:
+static func font_with(ch: String, primary: Font) -> Font:
 	var code := ch.unicode_at(0)
 	if primary.has_char(code):
 		return primary
