@@ -9,6 +9,7 @@ var room: MorningClassroom
 func _ready() -> void:
 	room = MorningClassroom.new()
 	add_child(room)
+	room.populate(16)
 	var cam := Camera3D.new()
 	cam.fov = 70.0
 	add_child(cam)

@@ -29,6 +29,8 @@ var _paper_tex: Texture2D
 var _grain: NoiseTexture2D
 var _wall_mat: ShaderMaterial
 var _desk_vscale: float = 1.0
+var _seats: Array[Dictionary] = []   # other students' desks: {base, yaw, chair}
+var students: Array[StudentFigure] = []
 
 
 func _init() -> void:
@@ -428,17 +430,18 @@ func _build_desks() -> void:
 			if mine:
 				jitter = Vector3.ZERO
 				yaw = 0.0
-			_desk(base + jitter, yaw)
+			var chair := _desk(base + jitter, yaw)
 			# The paper sits a little toward the student's edge of the desk, where people keep it.
 			var seat := _marker(base + jitter + Vector3(0, desk_top_y + 0.0012, 0.05), Basis(Vector3.UP, deg_to_rad(yaw)))
 			if mine:
 				player_seat = seat
 			else:
 				student_seats.append(seat)
-				_desk_clutter(base + jitter, yaw)
+				_seats.append({"base": base + jitter, "yaw": yaw, "chair": chair})
 
 
-func _desk(base: Vector3, yaw: float) -> void:
+## Returns where the chair seat is (floor level, centre of the seat).
+func _desk(base: Vector3, yaw: float) -> Vector3:
 	var desk := _model("SchoolDesk_01", base, yaw)
 	if desk:
 		desk.scale = Vector3(1.0, _desk_vscale, 1.0)
@@ -447,11 +450,44 @@ func _desk(base: Vector3, yaw: float) -> void:
 		for sx in [-0.3, 0.3]:
 			for sz in [-0.2, 0.2]:
 				_box(Vector3(0.025, 0.74, 0.025), base + Vector3(sx, 0.37, sz), _plain(Color(0.55, 0.56, 0.58), 0.4, 0.7))
-	var chair := _model("SchoolChair_01", base + Vector3(_rng.randf_range(-0.03, 0.03), 0, 0.5), 180.0 + yaw + _rng.randf_range(-6, 6))
+	var at := base + Vector3(_rng.randf_range(-0.03, 0.03), 0, 0.5)
+	var chair := _model("SchoolChair_01", at, 180.0 + yaw + _rng.randf_range(-6, 6))
 	if chair == null:
-		var ch := base + Vector3(0, 0, 0.45)
-		_box(Vector3(0.42, 0.03, 0.4), ch + Vector3(0, 0.45, 0), _plain(Color("#2F3236"), 0.55))
-		_box(Vector3(0.42, 0.32, 0.03), ch + Vector3(0, 0.68, 0.2), _plain(Color("#2F3236"), 0.55))
+		_box(Vector3(0.42, 0.03, 0.4), at + Vector3(0, 0.45, 0), _plain(Color("#2F3236"), 0.55))
+		_box(Vector3(0.42, 0.32, 0.03), at + Vector3(0, 0.68, 0.2), _plain(Color("#2F3236"), 0.55))
+	return at
+
+
+## Seats `count` classmates at random desks (the same desks for the same seed), each with their
+## copy of the test, a pencil and the odd water bottle.
+func populate(count: int, seed: int = 7) -> void:
+	for st in students:
+		st.queue_free()
+	students.clear()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var order := range(_seats.size())
+	for i in range(order.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp = order[i]
+		order[i] = order[j]
+		order[j] = tmp
+	for k in mini(count, order.size()):
+		var seat: Dictionary = _seats[order[k]]
+		_desk_clutter(seat.base, seat.yaw)
+		var st := StudentFigure.new()
+		add_child(st)
+		st.position = seat.chair + Vector3(0, 0, 0.02)
+		st.rotation.y = deg_to_rad(seat.yaw)
+		st.setup(seed * 131 + order[k])
+		students.append(st)
+
+
+## Distance-based update rate so a full class stays cheap.
+func update_student_lod(eye: Vector3) -> void:
+	for st in students:
+		var d := st.global_position.distance_to(eye)
+		st.update_interval = 1.0 / 30.0 if d < 3.0 else (1.0 / 15.0 if d < 6.0 else 1.0 / 8.0)
 
 
 ## The Poly Haven desk is 0.88 m tall; school desks are about 0.76 m, so it is squashed
@@ -492,8 +528,6 @@ func _desk_clutter(base: Vector3, yaw: float) -> void:
 	var pencil := _box(Vector3(0.007, 0.007, 0.175), top + Vector3(_rng.randf_range(0.12, 0.22), 0.004, _rng.randf_range(-0.05, 0.1)),
 		_plain(Color(0.93, 0.72, 0.18), 0.5))
 	pencil.rotation.y = _rng.randf_range(-0.8, 0.8)
-	if _rng.randf() < 0.35:
-		_model("binder_notebook", top + Vector3(-0.2, 0.0, -0.12), yaw + _rng.randf_range(-20, 20), 0.55)
 	if _rng.randf() < 0.3:
 		var b := MeshInstance3D.new()
 		var cyl := CylinderMesh.new()

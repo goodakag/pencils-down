@@ -26,12 +26,15 @@ var _handing_in: bool = false
 var _page_time: PageTimeTracker
 var _menu_holder: CenterContainer
 var _menu_dim: ColorRect
+var _hint: ControlsHint
+var _tips: FirstRunTips
 
 
 func _ready() -> void:
 	room = MorningClassroom.new()
 	add_child(room)
 	room.apply_preset(str(Settings.get_value("graphics/preset")))
+	room.populate(int(Session.options.get("class_size", 16)), hash(Session.attempt.pdf_path) % 1000)
 	_build_packet()
 	_build_speech()
 	_bell = AudioStreamPlayer.new()
@@ -46,6 +49,12 @@ func _ready() -> void:
 	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_fade)
 	create_tween().tween_property(_fade, "color:a", 0.0, 1.2)
+	var hud := CanvasLayer.new()
+	hud.layer = 30
+	add_child(hud)
+	_hint = ControlsHint.new()
+	_hint.mode = str(Settings.get_value("ui/controls"))
+	hud.add_child(_hint)
 	_menu_dim = ColorRect.new()
 	_menu_dim.color = Color(0.1, 0.09, 0.08, 0.45)
 	_menu_dim.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -75,6 +84,13 @@ func _ready() -> void:
 		_slide_in_facedown()
 	else:
 		_settle_left = 0.0  # resumed straight into the test
+		if Session.timer.phase() == ExamTimer.Phase.OVER:
+			hand_in.call_deferred()  # saved after time ran out: it goes straight in
+	rig.ink_committed.connect(func(_k: String, _op: Dictionary) -> void: _tip_done(0))
+	packet.page_turned.connect(func(_i: int) -> void: _tip_done(1))
+	rig.view_changed.connect(func(v: PlayerRig.View) -> void:
+		if v == PlayerRig.View.LOOK_UP:
+			_tip_done(2))
 
 
 func _exit_tree() -> void:
@@ -157,6 +173,10 @@ func _slide_in_facedown() -> void:
 
 func _process(delta: float) -> void:
 	room.wall_clock.set_time(Session.seconds_of_day())
+	room.update_student_lod(rig.camera.global_position)
+	_update_hint()
+	if _menu_holder.visible:
+		return  # paused (the menu is open)
 	if _settle_left > 0.0:
 		_settle_left -= delta
 		Session.pre_roll_s = maxf(_settle_left, 0.0)
@@ -173,6 +193,38 @@ func _process(delta: float) -> void:
 			Session.autosave()
 
 
+func _update_hint() -> void:
+	var ctx := "desk"
+	if _settle_left > 0.0:
+		ctx = "settling"
+	elif rig.typing:
+		ctx = "typing"
+	elif packet.is_dragging():
+		ctx = "drag"
+	elif packet.is_overview():
+		ctx = "overview"
+	elif rig.view == PlayerRig.View.LOOK_UP:
+		ctx = "lookup"
+	_hint.set_context(ctx, {"scratch": not Session.attempt.scratch.is_empty(),
+		"hand_in_now": Session.machine.state == SessionMachine.State.GRACE})
+	_hint.visible = not _menu_holder.visible and not _handing_in
+
+
+func _start_tips() -> void:
+	if bool(Settings.get_value("ui/tips_seen")) or _tips != null:
+		return
+	_tips = FirstRunTips.new()
+	_hint.get_parent().add_child(_tips)
+	_tips.finished.connect(func() -> void:
+		Settings.set_value("ui/tips_seen", true)
+		_tips = null)
+
+
+func _tip_done(i: int) -> void:
+	if _tips:
+		_tips.done(i)
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if _settle_left > 0.0 and event.is_action_pressed("look_up"):
 		_settle_left = 0.01  # Space skips the settling-in
@@ -183,14 +235,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			close_menu()
 		else:
 			open_menu()
-	elif event.is_action_pressed("hand_in") and not rig.typing:
+	elif event.is_action_pressed("hand_in") and not rig.typing and not _menu_holder.visible:
 		hand_in()
 
 
 ## Esc: Practice pauses the clock; Strict keeps it running and says so.
 func open_menu() -> void:
 	var st := Session.machine.state
-	if not (st == SessionMachine.State.TESTING or st == SessionMachine.State.GRACE):
+	if not (st == SessionMachine.State.TESTING or st == SessionMachine.State.GRACE or st == SessionMachine.State.SETTLING):
 		return
 	rig.settle_input()
 	Session.timer.pause()
@@ -225,7 +277,7 @@ func close_menu() -> void:
 	_menu_dim.visible = false
 	_menu_holder.visible = false
 	Session.timer.unpause()
-	rig.input_enabled = not _handing_in
+	rig.input_enabled = not _handing_in and _settle_left <= 0.0
 
 
 func _apply_settings() -> void:
@@ -238,6 +290,11 @@ func _apply_settings() -> void:
 
 
 func _save_and_quit() -> void:
+	if _settle_left > 0.0:
+		# The test hadn't started yet: nothing to keep.
+		Session.machine.abort()
+		get_tree().change_scene_to_file("res://scenes/main.tscn")
+		return
 	rig.commit_in_progress()
 	_store_page_time()
 	Session.timer.unpause()
@@ -258,6 +315,7 @@ func _start_test() -> void:
 	packet.visible = true
 	rig.input_enabled = true
 	Session.start_test()
+	_start_tips()
 
 
 func facedown_pending() -> bool:
@@ -289,6 +347,7 @@ func hand_in() -> void:
 	if _handing_in or not (st == SessionMachine.State.TESTING or st == SessionMachine.State.GRACE):
 		return
 	_handing_in = true
+	rig.commit_in_progress()  # finishes any typing, so keys during the fade go nowhere
 	rig.input_enabled = false
 	Session.machine.transition_to(SessionMachine.State.HANDING_IN)
 	var t := create_tween()
