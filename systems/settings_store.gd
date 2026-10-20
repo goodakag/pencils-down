@@ -3,7 +3,11 @@ extends RefCounted
 ## Player settings with defaults, saved to user://settings.cfg ("section/key" names).
 
 const PATH := "user://settings.cfg"
+## Bumped when a saved value's meaning changes. 2: field of view became the seated vertical FOV
+## (default 50); a v0.1 file's 70 would zoom the desk out, so it is dropped on load.
+const VERSION := 2
 const DEFAULTS := {
+	"meta/version": VERSION,
 	"writing/hand": "right",
 	"writing/font": "caveat",
 	"input/mouse_sensitivity": 1.0,
@@ -55,8 +59,11 @@ func load(path: String = PATH) -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(path) != OK:
 		return
+	var old := int(cfg.get_value("meta", "version", 1)) < VERSION
 	for key in DEFAULTS:
 		var parts: PackedStringArray = key.split("/")
+		if key == "meta/version" or (old and key == "graphics/fov"):
+			continue
 		if cfg.has_section_key(parts[0], parts[1]):
 			_values[key] = cfg.get_value(parts[0], parts[1])
 

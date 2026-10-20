@@ -1,6 +1,6 @@
 class_name FirstRunTips
 extends MarginContainer
-## Three short tips the first time someone sits a test, one at a time near the bottom of the
+## Three short tips the first time someone sits a test, one at a time across the top of the
 ## screen. Each moves on by itself (or when you do the thing it describes); then they never
 ## show again (Settings "ui/tips_seen").
 
@@ -20,8 +20,8 @@ var _left: float = 0.0
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	add_theme_constant_override("margin_bottom", 42)
+	set_anchors_preset(Control.PRESET_CENTER_TOP)
+	add_theme_constant_override("margin_top", 28)
 	var panel := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(CozyTheme.PAPER, 0.94)
@@ -62,7 +62,7 @@ func next() -> void:
 	t.tween_callback(func() -> void:
 		_label.text = TIPS[_index]
 		reset_size()
-		set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 42))
+		set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 28))
 	t.tween_property(self, "modulate:a", 1.0, 0.35)
 
 

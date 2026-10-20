@@ -76,7 +76,8 @@ func set_lift(v: float) -> void:
 
 
 func get_lift() -> float:
-	return _mat.get_shader_parameter("lift")
+	var v: Variant = _mat.get_shader_parameter("lift")
+	return 0.0 if v == null else float(v)  # null until set_lift is first called
 
 
 func ink_viewport() -> SubViewport:

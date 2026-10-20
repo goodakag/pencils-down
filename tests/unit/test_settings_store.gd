@@ -36,6 +36,21 @@ func test_unknown_and_missing_keys() -> void:
 	assert_eq(s.get_value("test/mode"), "practice")
 	assert_null(s.get_value("test/bogus"))
 
+func test_v1_file_drops_old_fov() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("graphics", "fov", 70)
+	cfg.set_value("test", "grace_s", 60)
+	cfg.save(path)
+	var s := SettingsStore.new()
+	s.load(path)
+	assert_eq(s.get_value("graphics/fov"), 50)
+	assert_eq(s.get_value("test/grace_s"), 60)
+	s.set_value("graphics/fov", 62)
+	s.save(path)
+	var t := SettingsStore.new()
+	t.load(path)
+	assert_eq(t.get_value("graphics/fov"), 62)
+
 func test_missing_file_keeps_defaults() -> void:
 	var s := SettingsStore.new()
 	s.load("user://does_not_exist.cfg")

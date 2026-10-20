@@ -4,9 +4,9 @@ extends RefCounted
 ## packet; +Y up, the front of the room toward -Z). Measured from a real student desk: eyes about
 ## 44 cm above the desk top and a little behind its near edge.
 
-const DESK_EYE := Vector3(0.0, 0.36, 0.28)
+const DESK_EYE := Vector3(0.0, 0.32, 0.25)
 const DESK_LOOK := Vector3(0.0, 0.0, 0.015)
-const LEAN_EYE := Vector3(0.0, 0.2, 0.13)   # leaning right over the paper
+const LEAN_EYE := Vector3(0.0, 0.17, 0.11)  # leaning right over the paper
 const UPRIGHT_EYE := Vector3(0.0, 0.47, 0.42)
 const LOOK_UP_FOV := 34.0   # looking up = focusing on the clock, so the view narrows
 const FREE_YAW := 28.0
