@@ -3,24 +3,15 @@ extends Node3D
 ## First-person seat: camera views, the pencil that follows the cursor, and every input that marks
 ## the paper. The rig's origin is the desk surface at the centre of the test packet.
 
-enum View { DESK, LOOK_UP, LEAN_1, LEAN_2, STANDING }
+enum View { DESK, LOOK_UP }
 
 signal ink_committed(page_key: String, op: Dictionary)
 signal view_changed(view: View)
 
-const VIEW_TIME := 0.4
 const ERASE_RADIUS_PT := 6.0
-const SLIDE_STEP_PT := 18.0
-const FREE_LOOK_YAW := 25.0
-const FREE_LOOK_PITCH := 10.0
-# Camera position and look target per view, relative to the rig.
-const VIEWS := {
-	View.DESK: [Vector3(0.0, 0.31, 0.15), Vector3(0.0, 0.0, -0.03)],
-	View.LEAN_1: [Vector3(0.0, 0.24, 0.08), Vector3(0.0, 0.0, -0.05)],
-	View.LEAN_2: [Vector3(0.0, 0.17, 0.0), Vector3(0.0, 0.0, -0.09)],
-	View.LOOK_UP: [Vector3(0.0, 0.43, 0.33), Vector3(0.0, 0.62, -4.0)],
-	View.STANDING: [Vector3(0.0, 0.95, 0.45), Vector3(0.0, 0.85, -4.0)],
-}
+const SLIDE_SPEED_PT := 260.0   # W/S: paper slide speed, points per second
+const LEAN_STEP := 0.2          # per mouse-wheel notch
+const CAMERA_SMOOTH := 9.0      # higher = snappier head movement
 
 var packet: TestPacket
 var attempt: Attempt
@@ -36,11 +27,16 @@ var handwriting: HandwritingNode
 var camera: Camera3D
 var pencil: PencilModel
 var view: View = View.DESK
-var _lean: int = 0
+var base_fov: float = 50.0
+var head_sway: bool = true
+var look_target: Vector3 = Vector3(0, 1.65, -4.7)  # global; set to the wall clock by TestFlow
+var _lean: float = 0.0
+var _lean_target: float = 0.0
+var _lean_focus := Vector3.ZERO
+var _sway_t: float = 0.0
 var _space_held: bool = false
 var _edge_up: bool = false
 var _free_look := Vector2.ZERO
-var _view_tween: Tween
 var _ink := InkInput.new()
 var _erasing: bool = false
 var _erase_before: Dictionary = {}
@@ -49,18 +45,20 @@ var _erase_key: String = ""
 var _undo: Dictionary = {}  # page key -> UndoStack
 var _last_mouse := Vector2.ZERO
 var _mouse_seen: bool = false  # edge-look only arms after the mouse has really moved
+var _drag_t: float = 0.0
+var _hovering_grab: bool = false
 
 
 func _ready() -> void:
 	InputActions.ensure()
 	camera = Camera3D.new()
-	camera.fov = 55.0
+	camera.fov = base_fov
 	camera.near = 0.02
 	add_child(camera)
 	pencil = PencilModel.new()
 	add_child(pencil)
 	_last_mouse = get_viewport().get_visible_rect().size * Vector2(0.55, 0.6)
-	_place_camera(View.DESK, 1.0)
+	camera.transform = SeatPose.desk(0.0, Vector3.ZERO)
 
 
 func setup(p: TestPacket, a: Attempt, d: PdfDoc) -> void:
@@ -83,24 +81,20 @@ func _process(delta: float) -> void:
 	elif not _space_held and _edge_up:
 		wants_up = true
 	_edge_up = wants_up and not _space_held
-	if wants_up and view != View.LOOK_UP and view != View.STANDING:
+	if wants_up and view != View.LOOK_UP:
 		set_view(View.LOOK_UP)
 	elif not wants_up and view == View.LOOK_UP:
-		set_view(_lean_view())
-	if view == View.LOOK_UP:
-		_apply_free_look()
+		set_view(View.DESK)
+	_slide_keys(delta)
+	_update_camera(delta)
+	_update_grab_hover()
 	_update_pencil()
 
 
 func _update_mouse_mode() -> void:
-	var desk_like := view != View.LOOK_UP and view != View.STANDING
-	var mode := Input.MOUSE_MODE_HIDDEN if (desk_like and input_enabled) else Input.MOUSE_MODE_VISIBLE
+	var mode := Input.MOUSE_MODE_HIDDEN if (view == View.DESK and input_enabled and not _hovering_grab) else Input.MOUSE_MODE_VISIBLE
 	if Input.mouse_mode != mode and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = mode
-
-
-func _lean_view() -> View:
-	return [View.DESK, View.LEAN_1, View.LEAN_2][_lean]
 
 
 func set_view(v: View) -> void:
@@ -109,33 +103,42 @@ func set_view(v: View) -> void:
 	view = v
 	if v != View.LOOK_UP:
 		_free_look = Vector2.ZERO
-	_place_camera(v, VIEW_TIME)
 	view_changed.emit(v)
 
 
-func _place_camera(v: View, time: float) -> void:
-	var target_xform := _view_xform(v)
-	if _view_tween:
-		_view_tween.kill()
-	if time >= 1.0:
-		camera.transform = target_xform
+## The head eases toward where it wants to be every frame, so looking up, leaning and returning
+## are one continuous movement rather than canned animations.
+func _update_camera(delta: float, snap: bool = false) -> void:
+	_lean = lerpf(_lean, _lean_target, 1.0 - exp(-delta * 7.0))
+	var target: Transform3D
+	var fov := base_fov
+	if view == View.LOOK_UP:
+		target = SeatPose.look_up(to_local(look_target), _free_look)
+		fov = minf(SeatPose.LOOK_UP_FOV, base_fov)
+	else:
+		if _lean_target > 0.0:
+			var p: Variant = _ray_to_plane(_last_mouse, global_position.y)
+			if p != null:
+				_lean_focus = _lean_focus.lerp(to_local(p).clamp(Vector3(-0.2, 0, -0.18), Vector3(0.2, 0, 0.18)), 1.0 - exp(-delta * 3.0))
+		target = SeatPose.desk(_lean, _lean_focus)
+	if head_sway:
+		_sway_t += delta
+		target.origin += SeatPose.sway(_sway_t) * (1.0 - _lean * 0.7)
+	var k := 1.0 if snap else 1.0 - exp(-delta * CAMERA_SMOOTH)
+	camera.transform = camera.transform.interpolate_with(target, k)
+	camera.fov = lerpf(camera.fov, fov, k)
+
+
+func _slide_keys(delta: float) -> void:
+	if not input_enabled or typing or packet == null or view != View.DESK:
 		return
-	_view_tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_view_tween.tween_property(camera, "transform", target_xform, time)
-
-
-func _view_xform(v: View) -> Transform3D:
-	var pair: Array = VIEWS[v]
-	return Transform3D(Basis(), pair[0]).looking_at(pair[1], Vector3.UP)
-
-
-func _apply_free_look() -> void:
-	if _view_tween and _view_tween.is_running():
-		return
-	var base := _view_xform(View.LOOK_UP)
-	var b := base.basis.rotated(Vector3.UP, deg_to_rad(-_free_look.x * FREE_LOOK_YAW))
-	b = b * Basis(Vector3.RIGHT, deg_to_rad(-_free_look.y * FREE_LOOK_PITCH))
-	camera.transform = Transform3D(b, base.origin)
+	var dir := 0.0
+	if Input.is_physical_key_pressed(KEY_W):
+		dir -= 1.0
+	if Input.is_physical_key_pressed(KEY_S):
+		dir += 1.0
+	if dir != 0.0:
+		packet.slide(dir * SLIDE_SPEED_PT * delta)
 
 
 # --- Input -------------------------------------------------------------------------------------
@@ -190,13 +193,11 @@ func _on_mouse_button(b: InputEventMouseButton) -> void:
 	if b.button_index == MOUSE_BUTTON_WHEEL_UP or b.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 		if not b.pressed:
 			return
-		var dir := 1 if b.button_index == MOUSE_BUTTON_WHEEL_UP else -1
+		var dir := 1.0 if b.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
 		if b.ctrl_pressed:
-			_lean = clampi(_lean + dir, 0, 2)
-			if view != View.LOOK_UP:
-				set_view(_lean_view())
+			packet.slide(-dir * 18.0)  # Ctrl+wheel slides the paper
 		else:
-			packet.slide(-dir * SLIDE_STEP_PT)
+			lean_by(dir * LEAN_STEP)
 		return
 	if view == View.LOOK_UP:
 		return
@@ -249,6 +250,8 @@ func settle_input() -> void:
 	if _fill_tween and _fill_tween.is_running():
 		_fill_tween.custom_step(10.0)
 	_end_erase()
+	if packet.is_dragging():
+		packet.end_drag()
 	_space_held = false
 	_edge_up = false
 	edge_look.reset()
@@ -284,9 +287,47 @@ static func on_focus_lost(input: InkInput) -> Stroke:
 	return input.end() if input.is_active() else null
 
 
+## Pressing on a page's edge (or the folded-back pages) takes hold of the sheet to turn it.
+func _try_grab(screen: Vector2) -> bool:
+	if packet.is_overview() or typing:
+		return false
+	var hit: Variant = _ray_to_plane(screen, packet.global_position.y)
+	if hit == null:
+		return false
+	if not packet.begin_drag(packet.plane_point(hit)):
+		return false
+	_cancel_stroke()
+	_drag_t = _now()
+	return true
+
+
+func _update_grab_hover() -> void:
+	var want := false
+	if input_enabled and view == View.DESK and not typing and not _ink.is_active() and not _erasing and packet != null and not packet.is_overview():
+		var hit: Variant = _ray_to_plane(_last_mouse, packet.global_position.y)
+		if hit != null:
+			want = packet.grab_kind(packet.plane_point(hit)) != TestPacket.Grab.NONE
+	if packet != null:
+		packet.set_hover(want and not packet.is_dragging())
+	var shape := Input.CURSOR_ARROW
+	if packet != null and packet.is_dragging():
+		shape = Input.CURSOR_DRAG
+	elif want:
+		shape = Input.CURSOR_POINTING_HAND
+	_hovering_grab = want or (packet != null and packet.is_dragging())
+	Input.set_default_cursor_shape(shape)
+
+
 # --- Pencil ------------------------------------------------------------------------------------
 
 func _on_pointer_move(pos: Vector2, pressure: float) -> void:
+	if packet.is_dragging():
+		var hit: Variant = _ray_to_plane(pos, packet.global_position.y)
+		if hit != null:
+			var now := _now()
+			packet.drag_to(packet.plane_point(hit), now - _drag_t)
+			_drag_t = now
+		return
 	if _ink.is_active():
 		var p: Variant = _pointer_pt(pos)
 		if p != null:
@@ -562,8 +603,21 @@ func last_mouse() -> Vector2:
 	return _last_mouse
 
 
+## Mouse wheel: lean in toward the cursor (or sit back).
+func lean_by(amount: float) -> void:
+	_lean_target = clampf(_lean_target + amount, 0.0, 1.0)
+	if _lean_target > 0.0 and _lean <= 0.01:
+		var p: Variant = _ray_to_plane(_last_mouse, global_position.y)
+		if p != null:
+			_lean_focus = to_local(p).clamp(Vector3(-0.2, 0, -0.18), Vector3(0.2, 0, 0.18))
+
+
+func lean() -> float:
+	return _lean_target
+
+
 func _update_pencil() -> void:
-	var desk_like := view != View.LOOK_UP and view != View.STANDING
+	var desk_like := view == View.DESK and not _hovering_grab
 	pencil.visible = desk_like and input_enabled and packet != null and not packet.is_overview()
 	if not pencil.visible:
 		return

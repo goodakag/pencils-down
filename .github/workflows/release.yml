@@ -22,8 +22,10 @@ jobs:
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
           unzip -q templates.tpz -d tpl && mv tpl/templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
           rm templates.tpz
-      - name: Fetch PDFium-GDE
-        run: bash tools/fetch_pdfium_gde.sh
+      - name: Fetch PDFium-GDE and CC0 art
+        run: |
+          bash tools/fetch_pdfium_gde.sh
+          python3 tools/fetch_assets.py
       - name: Import and test
         run: |
           ./godot --headless --path . --import || true
