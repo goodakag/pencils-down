@@ -12,7 +12,7 @@ var _card: Control
 func _ready() -> void:
 	InputActions.ensure()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	add_child(GreyboxClassroom.new())
+	add_child(MorningClassroom.new())
 	_cam = Camera3D.new()
 	_cam.fov = 60
 	add_child(_cam)

@@ -9,6 +9,8 @@ extends Node3D
 @export var handin_path: Path3D
 @export var wall_clock: WallClock
 @export var board: Whiteboard
+## Distance from the desk-surface origin to the desk's far edge, along -Z (negative).
+@export var desk_far_edge: float = -0.32
 
 
 ## Names of missing pieces; empty when the room is complete.

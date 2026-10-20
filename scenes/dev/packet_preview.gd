@@ -5,61 +5,35 @@ var packet: TestPacket
 var rig: PlayerRig
 
 
+var room: MorningClassroom
+
+
 func _ready() -> void:
-	var env := WorldEnvironment.new()
-	var e := Environment.new()
-	e.background_mode = Environment.BG_COLOR
-	e.background_color = Color(0.55, 0.52, 0.47)
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.78, 0.82, 0.9)
-	e.ambient_light_energy = 0.55
-	e.tonemap_mode = Environment.TONE_MAPPER_AGX
-	e.tonemap_exposure = 1.35
-	e.ssao_enabled = true
-	env.environment = e
-	add_child(env)
-
-	var sun := DirectionalLight3D.new()
-	sun.light_color = Color(1.0, 0.86, 0.68)
-	sun.light_energy = 2.2
-	sun.shadow_enabled = true
-	sun.rotation = Vector3(deg_to_rad(-32), deg_to_rad(-70), 0)
-	sun.shadow_blur = 1.5
-	sun.shadow_bias = 0.03
-	sun.shadow_normal_bias = 1.5
-	sun.directional_shadow_max_distance = 3.0
-	add_child(sun)
-
-	var desk := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(0.76, 0.02, 0.56)
-	desk.mesh = box
-	var wood := StandardMaterial3D.new()
-	wood.albedo_color = Color("#C9A57A")
-	wood.roughness = 0.55
-	desk.material_override = wood
-	desk.position.y = -0.0105
-	add_child(desk)
+	room = MorningClassroom.new()
+	add_child(room)
+	room.wall_clock.set_time(9 * 3600 + 12 * 60)
 
 	var path := ProjectSettings.globalize_path("res://tests/fixtures/mc_letter.pdf")
 	var doc := PdfDoc.open(path)
 	var attempt := Attempt.create(doc, {"scratch_sheets": 1})
 	_sample_ink(doc, attempt)
 	packet = TestPacket.new()
+	packet.desk_far_edge = room.desk_far_edge
 	packet.cache_async = false
 	add_child(packet)
-	packet.rotation.y = deg_to_rad(2.0)
+	packet.global_transform = room.desk_surface() * Transform3D(Basis(Vector3.UP, deg_to_rad(2.0)), Vector3.ZERO)
 	packet.setup(doc, attempt, 150.0)
 
 	rig = PlayerRig.new()
 	add_child(rig)
+	rig.global_transform = room.desk_surface()
 	rig.setup(packet, attempt, doc)
+	rig.look_target = room.wall_clock.global_position.lerp(room.board.global_position, 0.3)
 	# Park the pencil near question 1 for the screenshot.
 	await get_tree().process_frame
 	rig._last_mouse = rig.camera.unproject_position(packet.active_page().to_global(Vector3(0.02, 0, -0.085)))
 	if OS.get_cmdline_user_args().has("--lean"):
-		rig._lean = 2
-		rig.set_view(PlayerRig.View.LEAN_2)
+		rig.lean_by(1.0)
 
 
 func _sample_ink(doc: PdfDoc, attempt: Attempt) -> void:
@@ -94,10 +68,23 @@ func dev_action(name: String) -> void:
 		"prev": packet.turn(-1)
 		"scratch": packet.toggle_scratch()
 		"overview": packet.set_overview(true)
-		"lookup": rig.set_view(PlayerRig.View.LOOK_UP)
+		"lookup": rig._space_held = true
+		"drag_corner": _drag(Vector2(0.1, 0.135), Vector2(0.03, -0.04))
+		"drag_side": _drag(Vector2(0.105, 0.02), Vector2(-0.06, -0.08))
+		"drag_left": _drag(Vector2(-0.07, 0.137), Vector2(-0.02, -0.03))
+		"drag_back": _drag(Vector2(0.0, -0.3), Vector2(0.0, -0.05))
 		"fill": _click_pt(Vector2(150, 7 * 0 + 80 + 4 * 66 + 30), true)
 		"type": _type_at(Vector2(290, 80 + 5 * 66 + 34), "x = 7 because 3(7) - 2 = 19")
 		"eraser": rig.pencil.set_eraser(true)
+
+
+## Takes hold of the sheet at packet-plane point `from` and holds it at `to` (no release).
+func _drag(from: Vector2, to: Vector2) -> void:
+	if not packet.begin_drag(from):
+		push_warning("nothing to grab at %s" % from)
+		return
+	for i in 12:
+		packet.drag_to(from.lerp(to, (i + 1) / 12.0), 1.0 / 60.0)
 
 
 func _screen_of(pt: Vector2) -> Vector2:

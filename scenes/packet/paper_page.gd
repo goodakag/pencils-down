@@ -7,6 +7,7 @@ const PT_PER_M := 2834.65
 const SHADER := preload("res://scenes/packet/paper_page.gdshader")
 
 var size_pt: Vector2 = Vector2(612, 792)
+var fold: PageCurl
 var ink_dpi: float = 150.0
 var _mat: ShaderMaterial
 var _viewport: SubViewport
@@ -33,10 +34,12 @@ func set_page(tex: Texture2D, page_size_pt: Vector2, dpi: float = 150.0) -> void
 	var m := size_m()
 	var plane := PlaneMesh.new()
 	plane.size = m
-	plane.subdivide_width = 6
-	plane.subdivide_depth = 24
+	# Fine enough for a diagonal curl to stay smooth.
+	plane.subdivide_width = 36
+	plane.subdivide_depth = 46
 	mesh = plane
-	_mat.set_shader_parameter("page_len", m.y)
+	_mat.set_shader_parameter("page_size", m)
+	set_fold(PageCurl.flat(m))
 	set_texture(tex)
 	_viewport.size = Vector2i((page_size_pt * dpi / 72.0).ceil())
 	_mat.set_shader_parameter("ink_tex", _viewport.get_texture())
@@ -51,16 +54,29 @@ func size_m() -> Vector2:
 	return size_pt / PT_PER_M
 
 
-func set_curl(v: float) -> void:
-	_mat.set_shader_parameter("curl", v)
+## Bends the sheet (see PageCurl). PageCurl.flat() lays it flat again.
+func set_fold(c: PageCurl) -> void:
+	fold = c
+	_mat.set_shader_parameter("fold_origin", c.origin)
+	_mat.set_shader_parameter("fold_normal", c.normal)
+	_mat.set_shader_parameter("fold_radius", c.radius)
 
 
-func get_curl() -> float:
-	return _mat.get_shader_parameter("curl")
+## Page-local z of the desk's far edge: turned-over paper hangs down past it.
+func set_drape(z: float) -> void:
+	_mat.set_shader_parameter("drape_z", z)
+
+
+func is_folded() -> bool:
+	return fold != null and fold.progress() > 0.0
 
 
 func set_lift(v: float) -> void:
 	_mat.set_shader_parameter("lift", v)
+
+
+func get_lift() -> float:
+	return _mat.get_shader_parameter("lift")
 
 
 func ink_viewport() -> SubViewport:

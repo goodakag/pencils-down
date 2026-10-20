@@ -29,8 +29,9 @@ var _menu_dim: ColorRect
 
 
 func _ready() -> void:
-	room = GreyboxClassroom.new()
+	room = MorningClassroom.new()
 	add_child(room)
+	room.apply_preset(str(Settings.get_value("graphics/preset")))
 	_build_packet()
 	_build_speech()
 	_bell = AudioStreamPlayer.new()
@@ -90,6 +91,7 @@ func _store_page_time() -> void:
 func _build_packet() -> void:
 	var seat := room.desk_surface()
 	packet = TestPacket.new()
+	packet.desk_far_edge = room.desk_far_edge
 	add_child(packet)
 	packet.global_transform = seat * Transform3D(Basis(Vector3.UP, deg_to_rad(2.0)), Vector3.ZERO)
 	packet.setup(Session.doc, Session.attempt, paper_dpi)
@@ -99,6 +101,8 @@ func _build_packet() -> void:
 	rig.global_transform = seat
 	rig.setup(packet, Session.attempt, Session.doc)
 	rig.elapsed_provider = func() -> float: return Session.timer.elapsed()
+	# Looking up centres on the clock with the top of the board just below it.
+	rig.look_target = room.wall_clock.global_position.lerp(room.board.global_position, 0.3)
 	_apply_settings()
 
 
@@ -228,6 +232,9 @@ func _apply_settings() -> void:
 	rig.font_id = StringName(Settings.get_value("writing/font"))
 	rig.edge_look.enabled = bool(Settings.get_value("input/edge_look"))
 	rig.pencil.set_left_handed(Settings.get_value("writing/hand") == "left")
+	rig.base_fov = float(Settings.get_value("graphics/fov"))
+	rig.head_sway = bool(Settings.get_value("graphics/head_sway"))
+	room.wall_clock.twelve_hour = not bool(Settings.get_value("test/clock_24h"))
 
 
 func _save_and_quit() -> void:
@@ -296,7 +303,7 @@ func hand_in() -> void:
 func dev_action(name: String) -> void:
 	match name:
 		"skip": _settle_left = 0.01
-		"lookup": rig.set_view(PlayerRig.View.LOOK_UP)
+		"lookup": rig._space_held = true
 		"handin": hand_in()
 		"menu": open_menu()
 		"warn": _on_warning(15)
