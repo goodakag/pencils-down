@@ -287,6 +287,9 @@ func _apply_settings() -> void:
 	rig.base_fov = float(Settings.get_value("graphics/fov"))
 	rig.head_sway = bool(Settings.get_value("graphics/head_sway"))
 	room.wall_clock.twelve_hour = not bool(Settings.get_value("test/clock_24h"))
+	room.apply_preset(str(Settings.get_value("graphics/preset")))
+	if _hint:
+		_hint.mode = str(Settings.get_value("ui/controls"))
 
 
 func _save_and_quit() -> void:

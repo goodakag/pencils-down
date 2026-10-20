@@ -1,89 +1,146 @@
 extends Node3D
-## Boot scene: the empty morning classroom, softly blurred, with one paper card on top.
+## Boot scene: the empty morning classroom before anyone arrives, a slow camera drift through it,
+## the menu down the left and whatever you open (new test, settings, history) beside it.
+## "Take your seat" flies the camera to your desk before the test begins.
 
 const TEST_SCENE := "res://scenes/flow/test_scene.tscn"
+const PANEL_W := 430.0
 
+var room: MorningClassroom
 var _cam: Camera3D
 var _t: float = 0.0
 var _holder: CenterContainer
 var _card: Control
+var _menu: MainMenuCard
+var _ui: Control
+var _flying: bool = false
 
 
 func _ready() -> void:
 	InputActions.ensure()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	var room := MorningClassroom.new()
+	room = MorningClassroom.new()
 	add_child(room)
 	room.populate(0)
+	room.apply_preset(str(Settings.get_value("graphics/preset")))
+	room.wall_clock.set_time(float(Settings.get_value("test/start_minute")) * 60.0 - 600.0)
+	room.wall_clock.twelve_hour = not bool(Settings.get_value("test/clock_24h"))
+	room.board.set_lines("Good morning!", "Tests today. Phones away, please.")
 	_cam = Camera3D.new()
-	_cam.fov = 60
+	_cam.fov = 52
 	add_child(_cam)
 	var layer := CanvasLayer.new()
 	add_child(layer)
-	var blur := ColorRect.new()
-	blur.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var mat := ShaderMaterial.new()
-	mat.shader = load("res://scenes/ui/blur.gdshader")
-	blur.material = mat
-	blur.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(blur)
-	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.theme = CozyTheme.get_theme()
-	layer.add_child(root)
+	_ui = Control.new()
+	_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ui.theme = CozyTheme.get_theme()
+	_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_ui)
+	# A soft shade behind the menu side so the room stays the subject.
+	var shade := TextureRect.new()
+	var grad := Gradient.new()
+	grad.set_color(0, Color(0.1, 0.09, 0.08, 0.35))
+	grad.set_color(1, Color(0.1, 0.09, 0.08, 0.0))
+	var gt := GradientTexture2D.new()
+	gt.gradient = grad
+	gt.fill_to = Vector2(1, 0)
+	shade.texture = gt
+	shade.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	shade.offset_right = PANEL_W + 360
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ui.add_child(shade)
+	var right := MarginContainer.new()
+	right.set_anchors_preset(Control.PRESET_FULL_RECT)
+	right.add_theme_constant_override("margin_left", int(PANEL_W) + 40)
+	right.add_theme_constant_override("margin_right", 40)
+	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ui.add_child(right)
 	_holder = CenterContainer.new()
-	_holder.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.add_child(_holder)
+	_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	right.add_child(_holder)
 	show_menu()
+	get_window().files_dropped.connect(_on_files_dropped)
+
+
+func _exit_tree() -> void:
+	if get_window().files_dropped.is_connected(_on_files_dropped):
+		get_window().files_dropped.disconnect(_on_files_dropped)
 
 
 func _process(delta: float) -> void:
-	# A slow drift across the room from the back corner.
+	if _flying:
+		return
+	# A slow walk down the window side of the room, looking across the desks to the front.
 	_t += delta
-	var p := Vector3(2.6 + sin(_t * 0.05) * 0.8, 1.35 + sin(_t * 0.07) * 0.05, 3.4)
-	_cam.position = p
-	_cam.look_at(Vector3(-1.2 + sin(_t * 0.04) * 0.6, 1.2, -2.0))
+	var k := 0.5 + 0.5 * sin(_t * 0.035)
+	_cam.position = Vector3(lerpf(-3.4, -2.6, k), 1.42 + sin(_t * 0.11) * 0.02, lerpf(3.4, 1.2, k))
+	_cam.look_at(Vector3(lerpf(0.4, 1.2, k), 1.05, -3.2))
 
 
 func _swap(card: Control) -> void:
 	if _card:
 		_card.queue_free()
 	_card = card
+	if card == null:
+		return
 	_holder.add_child(card)
 	card.modulate.a = 0.0
-	create_tween().tween_property(card, "modulate:a", 1.0, 0.25)
+	create_tween().tween_property(card, "modulate:a", 1.0, 0.2)
 
 
 func show_menu() -> void:
-	var m := MainMenuCard.new()
-	m.resume_available = Session.store.load_autosave() != null
-	m.new_test.connect(show_pretest)
-	m.settings.connect(show_settings)
-	m.history.connect(show_history)
-	m.resume_test.connect(resume)
-	_swap(m)
+	if _menu:
+		_menu.queue_free()
+	_menu = MainMenuCard.new()
+	_menu.resume_available = Session.store.load_autosave() != null
+	_menu.new_test.connect(show_pretest)
+	_menu.settings.connect(show_settings)
+	_menu.history.connect(show_history)
+	_menu.resume_test.connect(resume)
+	_menu.retake.connect(func(p: String) -> void:
+		show_pretest()
+		(_card as PreTestCard).load_pdf(p))
+	_ui.add_child(_menu)
+	_menu.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+	_menu.offset_right = PANEL_W
+	_swap(null)
 
 
 func show_pretest() -> void:
+	if _card is PreTestCard:
+		return
 	var p := PreTestCard.new()
-	p.back.connect(show_menu)
+	p.back.connect(func() -> void: _swap(null))
 	p.take_seat.connect(start_test)
 	_swap(p)
 
 
 func show_settings() -> void:
 	var s := SettingsCard.new()
-	s.back.connect(show_menu)
+	s.back.connect(func() -> void:
+		room.apply_preset(str(Settings.get_value("graphics/preset")))
+		_swap(null))
 	_swap(s)
 
 
 func show_history() -> void:
 	var h := HistoryCard.new()
-	h.back.connect(show_menu)
+	h.back.connect(func() -> void: _swap(null))
 	h.open_attempt.connect(func(path: String) -> void:
 		ReviewScreen.pending_attempt_path = path
 		get_tree().change_scene_to_file("res://scenes/ui/review.tscn"))
 	_swap(h)
+
+
+func _on_files_dropped(files: PackedStringArray) -> void:
+	if _flying or _card is PreTestCard:
+		return  # the pre-test card handles its own drops
+	for f in files:
+		if f.get_extension().to_lower() == "pdf":
+			show_pretest()
+			(_card as PreTestCard).load_pdf(f)
+			return
 
 
 func resume() -> void:
@@ -91,13 +148,10 @@ func resume() -> void:
 	if a and Session.resume(a):
 		get_tree().change_scene_to_file(TEST_SCENE)
 		return
-	var m := _card as MainMenuCard
-	if m == null:
-		return
 	if Session.last_resume_error == "changed":
-		m.show_notice("The PDF at %s has changed since this test was started, so it can't be resumed." % a.pdf_path)
+		_menu.show_notice("The PDF at %s has changed since this test was started, so it can't be resumed." % a.pdf_path)
 	else:
-		m.show_notice("Can't find the original PDF for the test in progress%s." % ((" at " + a.pdf_path) if a else ""))
+		_menu.show_notice("Can't find the original PDF for the test in progress%s." % ((" at " + a.pdf_path) if a else ""))
 
 
 func start_test(doc: PdfDoc, options: Dictionary) -> void:
@@ -105,7 +159,28 @@ func start_test(doc: PdfDoc, options: Dictionary) -> void:
 	Session.machine.abort()
 	Session.machine.transition_to(SessionMachine.State.PRETEST)
 	Session.begin(doc, options)
-	get_tree().change_scene_to_file(TEST_SCENE)
+	_fly_to_seat()
+
+
+## The camera walks over to your desk and sits down, then the test scene takes over.
+func _fly_to_seat() -> void:
+	_flying = true
+	var seat := room.desk_surface()
+	var target := seat * SeatPose.desk(0.0, Vector3.ZERO)
+	var fade := ColorRect.new()
+	fade.color = Color(0.06, 0.05, 0.05, 0.0)
+	fade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fade.mouse_filter = Control.MOUSE_FILTER_STOP
+	_ui.add_child(fade)
+	var t := create_tween()
+	t.set_parallel(true)
+	t.tween_property(_menu, "modulate:a", 0.0, 0.35)
+	if _card:
+		t.tween_property(_card, "modulate:a", 0.0, 0.35)
+	t.tween_property(_cam, "global_transform", target, 1.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	t.tween_property(_cam, "fov", float(Settings.get_value("graphics/fov")), 1.7)
+	t.chain().tween_property(fade, "color:a", 1.0, 0.3)
+	t.chain().tween_callback(func() -> void: get_tree().change_scene_to_file(TEST_SCENE))
 
 
 func dev_action(name: String) -> void:
@@ -120,7 +195,7 @@ func dev_action(name: String) -> void:
 			if (b as Button).text == "Take your seat":
 				(b as Button).pressed.emit()
 		"more": for b in _card.find_children("*", "Button", true, false):
-			if (b as Button).text.ends_with("More options"):
+			if (b as Button).text == "Change":
 				(b as Button).pressed.emit()
 
 

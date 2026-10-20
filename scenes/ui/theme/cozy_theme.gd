@@ -135,6 +135,14 @@ static func _build() -> Theme:
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
 		t.set_color(c, "Chip", INK)
 
+	# Drop-downs (the start-time picker): a boxed field like a chip.
+	t.set_stylebox("normal", "OptionButton", _box(CHIP_BG, CHIP_EDGE, 6, 1, Vector2(12, 6)))
+	t.set_stylebox("hover", "OptionButton", _box(Color("#FFF8E6"), CHIP_EDGE, 6, 1, Vector2(12, 6)))
+	t.set_stylebox("pressed", "OptionButton", _box(Color("#FFF8E6"), ACCENT_EDGE, 6, 1, Vector2(12, 6)))
+	t.set_stylebox("focus", "OptionButton", _box(Color(0, 0, 0, 0), ACCENT_EDGE, 6, 2, Vector2(12, 6)))
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		t.set_color(c, "OptionButton", INK)
+
 	# Link-style button.
 	t.set_type_variation("Link", "Button")
 	t.set_stylebox("normal", "Link", flat)

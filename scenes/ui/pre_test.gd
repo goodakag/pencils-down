@@ -1,11 +1,11 @@
 class_name PreTestCard
 extends PanelContainer
-## One card, three decisions: the PDF, the time, and "Take your seat" (spec §4.1).
+## One card: the PDF, a line saying how the test will run (length and start time, changeable),
+## and "Take your seat" (spec §4.1).
 
 signal take_seat(doc: PdfDoc, options: Dictionary)
 signal back()
 
-const TIMES := [30, 45, 60, 75, 90, 120]
 const ERR_ENCRYPTED := "This PDF is password-protected; remove the password and try again."
 const ERR_OPEN := "Couldn't open this PDF."
 
@@ -17,10 +17,10 @@ var _thumbs: HBoxContainer
 var _recent_box: VBoxContainer
 var _error: Label
 var _error_detail: Label
-var _custom: SpinBox
 var _start_btn: Button
-var _more: VBoxContainer
-var _validation: Label
+var _summary: Label
+var _form: TestSetupForm
+var _pages_note: Label
 var _dialog: FileDialog
 
 
@@ -77,32 +77,32 @@ func _ready() -> void:
 	_box.add_child(_recent_box)
 	_fill_recent()
 
-	_box.add_child(_mini("Time"))
-	var minutes := int(Settings.get_value("test/duration_min"))
-	var labels: Array = []
-	var values: Array = []
-	for m in TIMES:
-		labels.append("%d min" % m if m == minutes else str(m))
-		values.append(m)
-	labels.append("Custom")
-	values.append(-1)
-	var chips := ChipRow.new(labels, values, minutes if TIMES.has(minutes) else -1)
-	chips.selected.connect(_on_time)
-	_box.add_child(chips)
-	_custom = SpinBox.new()
-	_custom.min_value = 1
-	_custom.max_value = 600
-	_custom.suffix = "min"
-	_custom.value = minutes
-	_custom.visible = not TIMES.has(minutes)
-	_custom.value_changed.connect(func(v: float) -> void:
-		Settings.set_value("test/duration_min", int(v))
-		_validate())
-	_box.add_child(_custom)
-	_validation = Label.new()
-	_validation.theme_type_variation = "Error"
-	_validation.visible = false
-	_box.add_child(_validation)
+	_pages_note = Label.new()
+	_pages_note.theme_type_variation = "Muted"
+	_pages_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_pages_note.visible = false
+	_box.add_child(_pages_note)
+
+	# What will happen, in one line; "Change" opens the full form (saved as defaults).
+	var sum_row := HBoxContainer.new()
+	sum_row.add_theme_constant_override("separation", 12)
+	_box.add_child(sum_row)
+	_summary = Label.new()
+	_summary.add_theme_font_override("font", CozyTheme.bold_font())
+	_summary.add_theme_font_size_override("font_size", 19)
+	_summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sum_row.add_child(_summary)
+	var change := Button.new()
+	change.text = "Change"
+	change.theme_type_variation = "Link"
+	sum_row.add_child(change)
+	_form = TestSetupForm.new()
+	_form.visible = false
+	_form.changed.connect(_validate)
+	_box.add_child(_form)
+	change.pressed.connect(func() -> void:
+		_form.visible = not _form.visible
+		change.text = "Done" if _form.visible else "Change")
 
 	_box.add_child(MainMenuCard._gap(6))
 	_start_btn = Button.new()
@@ -111,18 +111,7 @@ func _ready() -> void:
 	_start_btn.disabled = true
 	_start_btn.pressed.connect(_on_start)
 	_box.add_child(_start_btn)
-
-	var more_btn := Button.new()
-	more_btn.text = "▸ More options"
-	more_btn.theme_type_variation = "Link"
-	more_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_box.add_child(more_btn)
-	_more = _build_more()
-	_more.visible = false
-	_box.add_child(_more)
-	more_btn.pressed.connect(func() -> void:
-		_more.visible = not _more.visible
-		more_btn.text = ("▾ " if _more.visible else "▸ ") + "More options")
+	_validate()
 
 	get_window().files_dropped.connect(_on_files_dropped)
 	_dialog = FileDialog.new()
@@ -138,31 +127,6 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if get_window().files_dropped.is_connected(_on_files_dropped):
 		get_window().files_dropped.disconnect(_on_files_dropped)
-
-
-func _build_more() -> VBoxContainer:
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 8)
-	_option(v, "Grace period after the bell", ["None", "1 min", "1.5 min", "2 min"], [0, 60, 90, 120], "test/grace_s")
-	_option(v, "Scratch paper", ["Off", "1 sheet", "2 sheets"], [0, 1, 2], "test/scratch_sheets")
-	_option(v, "Time warnings", ["None", "15 & 5 min", "30, 15 & 5 min"], [[], [15, 5], [30, 15, 5]], "test/warnings")
-	_option(v, "Clock", ["Wall clock", "No clock"], ["wall", "none"], "test/clock")
-	_option(v, "Mode", ["Practice (Esc pauses)", "Strict (time keeps running)"], ["practice", "strict"], "test/mode")
-	_option(v, "Class size", ["Small", "Normal", "Full"], [8, 16, 24], "test/class_size")
-	var starts_l: Array = []
-	var starts_v: Array = []
-	for m in [480, 510, 540, 600, 660, 780, 840]:
-		starts_l.append(BoardText.clock(m) + (" AM" if m < 720 else " PM"))
-		starts_v.append(m)
-	_option(v, "Start time on the clock", starts_l, starts_v, "test/start_minute")
-	return v
-
-
-func _option(parent: Control, label: String, labels: Array, values: Array, key: String) -> void:
-	parent.add_child(_mini(label))
-	var row := ChipRow.new(labels, values, Settings.get_value(key))
-	row.selected.connect(func(v: Variant) -> void: Settings.set_value(key, v))
-	parent.add_child(row)
 
 
 func _fill_recent() -> void:
@@ -236,21 +200,15 @@ func _show_error(msg: String, detail: String) -> void:
 	_error_detail.visible = detail != ""
 
 
-func _on_time(minutes: Variant) -> void:
-	_custom.visible = int(minutes) < 0
-	if int(minutes) > 0:
-		Settings.set_value("test/duration_min", int(minutes))
-	else:
-		Settings.set_value("test/duration_min", int(_custom.value))
-	_validate()
-
-
 func _validate() -> bool:
-	var msg := PretestOptions.validate(PretestOptions.from_settings(Settings.store))
-	_validation.text = msg
-	_validation.visible = msg != ""
-	_start_btn.disabled = doc == null or msg != ""
-	return msg == ""
+	var opts := PretestOptions.from_settings(Settings.store)
+	_summary.text = PretestOptions.summary(opts, bool(Settings.get_value("test/clock_24h")))
+	var ok := PretestOptions.validate(opts) == ""
+	if not ok:
+		_form.visible = true
+	_form.is_valid()
+	_start_btn.disabled = doc == null or not ok
+	return ok
 
 
 func _on_start() -> void:
